@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="container" style="max-width:720px;margin:28px auto;padding:18px;">
+  <div class="corner-deco" aria-hidden="true"></div>
+
+  <h2 style="display:flex;align-items:center;gap:10px">
+    <i class="fas fa-trash" style="color:var(--c3)"></i>
+    Confirmer la suppression
+  </h2>
+
+  <p style="margin-top:12px;color:var(--muted)">
+    Voulez‑vous vraiment supprimer la fiche de
+    <strong style="color:#082033">{{ personne.nom }} {{ personne.prenom }}</strong> ?
+    Cette action est irréversible.
+  </p>
+
+  <form method="POST" action="">
+    {% csrf_token %}
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button type="submit" class="btn btn-danger">Oui, supprimer</button>
+      <a href="{% url 'liste_personnes' %}" class="btn btn-primary">Non, annuler</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

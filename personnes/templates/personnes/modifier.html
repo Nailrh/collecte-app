@@ -1,0 +1,277 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Modifier une personne</title>
+
+  <link rel="stylesheet" href="{% static 'fontawesome/css/all.min.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/styled.css' %}" />
+
+  <style>
+    /* Page-specific small overrides that respect styled.css */
+    .info { color: var(--muted); text-align:center; margin-bottom:6px; }
+    .numero-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+    .numero-wrapper { position:relative; flex:1; }
+    .numero-input { padding-left:44px; } /* leave space for icon */
+    .numero-icon { position:absolute; left:5px; top:65%; transform:translateY(-50%); color:var(--c2); pointer-events:none; font-size:1rem; }
+    .btn-cancel { background: linear-gradient(90deg,#f87171,#ef4444); color:#fff; padding:8px 10px; border-radius:10px; border:0; cursor:pointer; display:inline-grid; place-items:center; }
+    .toast { position:fixed; right:18px; bottom:18px; display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; color:#fff; font-weight:600; z-index:9999; transform:translateY(6px); opacity:0; transition:all .24s; }
+    .toast.show { transform:translateY(0); opacity:1; }
+    .loader { width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,0.15);border-top-color:rgba(255,255,255,0.95); animation:spin .9s linear infinite; margin:0 auto; }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+    .shake{ animation: shake .3s ease; }
+    @keyframes shake{ 0%{transform:translateX(0)}25%{transform:translateX(-4px)}50%{transform:translateX(4px)}75%{transform:translateX(-4px)}100%{transform:translateX(0)} }
+    .error-box{ background:#fff1f0; border:1px solid #ffccd5; color:#9b2c2c; padding:10px; border-radius:8px; margin-bottom:12px; }
+    @media(max-width:420px){ .numero-input{ padding-left:40px } }
+
+    /* ------------------------------------------------------------------
+       ICON LAYOUT FOR FORM FIELDS (non-numéros)
+       - Respecte ta structure HTML : les <i class="input-icon ..."> existent
+       - Contrôle placement, taille et espacement sans toucher aux inputs
+       - Ajuste les variables ci-dessous pour personnaliser l'apparence
+       ------------------------------------------------------------------ */
+
+    /* variables (override dans styled.css si besoin) */
+    :root {
+      --field-icon-size: 1.05rem;    /* taille de l'icône */
+      --field-icon-gap: 10px;        /* espace entre icône et label/input */
+      --field-icon-color: var(--c1,#007bff);
+      --field-icon-bg: transparent;
+    }
+
+    /* wrapper for each form group (kept minimal to avoid interfering with existing rules) */
+    .form-group {
+      margin-bottom:12px;
+      position:relative;
+    }
+
+    /* We detect groups that have an icon on the left via input-icon-left class (your template uses it) */
+    .form-group.input-icon-left {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    /* Icon element styling (you already use <i class="input-icon ...">) */
+    .form-group .input-icon {
+      position:absolute;                 /* visually positioned relative to the group */
+      left:500px;                         /* horizontal position of icon */
+      top:10%;                           /* vertical centering */
+      transform:translateY(-50%);
+      width: calc(var(--field-icon-size) * 1.5);
+      height: calc(var(--field-icon-size) * 1.5);
+      display:inline-grid;
+      place-items:center;
+      font-size: var(--field-icon-size);
+      color: var(--field-icon-color);
+      background: var(--field-icon-bg);
+      pointer-events: none;              /* icon purely decorative */
+      opacity:0.95;
+    }
+
+    /* When the input sits next to an absolutely-positioned icon, add left padding to inputs */
+    /* We only apply to non-tel inputs (you said numbers are handled) */
+    .form-group.input-icon-left input[type="text"],
+    .form-group.input-icon-left input[type="email"],
+    .form-group.input-icon-left input[type="date"],
+    .form-group.input-icon-left textarea,
+    .form-group.input-icon-left .form-control:not([type="tel"]) {
+      padding-left:44px;                 /* leave space for icon; tweak if needed */
+    }
+
+    /* If you want icons on the right for specific fields, you can add input-icon-right class to the group
+       (not applied automatically here; comment explains how to use) */
+    .form-group.input-icon-right .input-icon {
+      left: auto;
+      right: 10px;
+    }
+    .form-group.input-icon-right input,
+    .form-group.input-icon-right textarea {
+      padding-left: 12px;
+      padding-right:44px;
+    }
+
+    /* Smaller screens adjustments */
+    @media (max-width:480px) {
+      :root { --field-icon-size: 0.95rem; }
+      .form-group .input-icon { left:8px; }
+      .form-group.input-icon-left input,
+      .form-group.input-icon-left textarea,
+      .form-group.input-icon-left .form-control:not([type="tel"]) {
+        padding-left:40px;
+      }
+    }
+
+    /* Accessibility: hide decorative icons from assistive tech explicitly */
+    .input-icon[aria-hidden="true"] { speak: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2><i class="fas fa-user-edit" style="color:var(--c1)"></i> Modifier la personne</h2>
+    <p class="info">Mets à jour les informations puis Enregistrer</p>
+
+    <nav style="display:flex;gap:10px;justify-content:center;margin:8px 0 12px 0;">
+      <a href="{% url 'home' %}" class="icon-btn white-inside" title="Accueil" aria-label="Accueil"><i class="fas fa-home" style="color: #fff"></i></a>
+      <a href="{% url 'liste_personnes' %}" class="icon-btn white-inside" title="Liste" aria-label="Liste"><i class="fas fa-list" style="color: #fff"></i></a>
+      <a href="{% url 'ajouter_personne' %}" class="icon-btn white-inside" title="Ajouter" aria-label="Ajouter"><i class="fas fa-user-plus" style="color: #fff"></i></a>
+      <a href="#" onclick="navigator.share && navigator.share({title:document.title,text:'Partager',url:location.href})" class="icon-btn" title="Partager" aria-label="Partager" style="background:rgba(255,255,255,0.10);color:#232121"><i class="fas fa-share-alt"></i></a>
+    </nav>
+
+    {% if erreurs %}
+      <div class="error-box">
+        <ul>
+          {% for e in erreurs %}
+            <li>{{ e }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="POST" id="modifierForm" novalidate>
+      {% csrf_token %}
+
+      {# Render form fields with contextual icons. We preserve each field output exactly (name/id/attrs) #}
+      {% for field in form.visible_fields %}
+        <div class="form-group input-arrow-right">
+          {# Choose an icon by field name (adapt these names to your form field names) #}
+          {% if field.name == 'nom' %}
+            <!-- ICON: Nom — ajuster position/size via .input-icon and CSS en haut du fichier -->
+            <i class="" aria-hidden="true"></i>
+          {% elif field.name == 'prenom' %}
+            <!-- ICON: Prenom -->
+            <i class="" aria-hidden="true"></i>
+          {% elif field.name == 'email' %}
+            <!-- ICON: Email -->
+            <i class="" aria-hidden="true"></i>
+          {% elif field.name == 'adresse' or field.name == 'adresse_postale' %}
+            <!-- ICON: Adresse -->
+            <i class="" aria-hidden="true"></i>
+          {% elif field.name == 'date_naissance' or field.name == 'date' %}
+            <!-- ICON: Date -->
+            <i class="" aria-hidden="true"></i>
+          {% elif field.name == 'note' or field|add:'x' == 'note' %}
+            <!-- ICON: Note -->
+            <i class="" aria-hidden="true"></i>
+          {% else %}
+            <!-- ICON: Fallback -->
+            <i class="" aria-hidden="true"></i>
+          {% endif %}
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            <div class="field-error" role="alert">
+              {{ field.errors|striptags }}
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="form-group">
+        <label><i class="fas fa-phone" style="color:var(--c2)"></i> Numéros</label>
+        <div id="numeros">
+          {% for numero in numeros %}
+            <div class="numero-row">
+              <div class="numero-wrapper">
+                <i class="fas fa-phone numero-icon" aria-hidden="true"></i>
+                <input type="tel" name="numero_{{ forloop.counter }}" value="{{ numero }}" class="form-control numero-input" required pattern="[0-9]{7,20}" inputmode="numeric" />
+              </div>
+              <button type="button" class="btn-cancel" onclick="supprimerNumero(this)" title="Supprimer ce numéro" aria-label="Supprimer numéro">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          {% endfor %}
+          {% if numeros|length == 0 %}
+            <div class="numero-row">
+              <div class="numero-wrapper">
+                <i class="fas fa-phone numero-icon" aria-hidden="true"></i>
+                <input type="tel" name="numero_1" class="form-control numero-input" required pattern="[0-9]{7,20}" inputmode="numeric" placeholder="Ex : 0331234567" />
+              </div>
+              <button type="button" class="btn-cancel" onclick="supprimerNumero(this)" title="Supprimer ce numéro" aria-label="Supprimer numéro">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <button type="button" class="btn btn-info" onclick="ajouterNumero()" title="Ajouter un numéro" aria-label="Ajouter un numéro"><i class="fas fa-plus"></i></button>
+        <button type="submit" class="btn btn-success" style="margin-left:auto"><i class="fas fa-pencil-alt"></i> Enregistrer</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="page-loader" style="display:none;position:fixed;inset:0;background:rgba(6,12,25,0.28);z-index:9998;align-items:center;justify-content:center;">
+    <div style="text-align:center;color:white">
+      <div class="loader"></div>
+      <div style="margin-top:8px;font-weight:700">Chargement...</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <i class="fas fa-check-circle"></i>
+    <div id="toast-text">Action effectuée</div>
+  </div>
+
+  <script>
+    let compteur = {{ numeros|length|default:1 }} + 1;
+
+    function ajouterNumero() {
+      const container = document.getElementById('numeros');
+      const row = document.createElement('div');
+      row.className = 'numero-row';
+      row.innerHTML = `
+        <div class="numero-wrapper">
+          <i class="fas fa-phone numero-icon" aria-hidden="true"></i>
+          <input type="tel" name="numero_${compteur}" class="form-control numero-input" required pattern="[0-9]{7,20}" inputmode="numeric" placeholder="Numéro ${compteur}" />
+        </div>
+        <button type="button" class="btn-cancel" onclick="supprimerNumero(this)" title="Supprimer ce numéro" aria-label="Supprimer numéro">
+          <i class="fas fa-trash"></i>
+        </button>
+      `;
+      container.appendChild(row);
+      row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 });
+      compteur++;
+      showToast('Numéro ajouté', true);
+    }
+
+    function supprimerNumero(btn) {
+      const row = btn.closest('.numero-row');
+      if(!row) return;
+      row.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(.97)' }], { duration: 160 }).onfinish = () => row.remove();
+      showToast('Numéro supprimé', false);
+    }
+
+    function showToast(text, ok = true) {
+      const t = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      txt.textContent = text;
+      t.classList.add('show');
+      t.style.background = ok ? 'linear-gradient(90deg,var(--success),#059669)' : 'linear-gradient(90deg,var(--c3),#ef4444)';
+      clearTimeout(t._hide);
+      t._hide = setTimeout(() => t.classList.remove('show'), 2800);
+    }
+
+    document.getElementById('modifierForm')?.addEventListener('submit', function (e) {
+      const inputs = document.querySelectorAll('input[name^="numero_"]');
+      let valid = true;
+      inputs.forEach(input => {
+        if (!input.checkValidity()) {
+          input.classList.add('shake');
+          valid = false;
+          showToast('Champ invalide ou vide', false);
+          setTimeout(() => input.classList.remove('shake'), 300);
+        }
+      });
+      if (!valid) {
+        e.preventDefault();
+        return;
+      }
+      document.getElementById('page-loader').style.display = 'flex';
+    });
+  </script>
+</body>
+</html>

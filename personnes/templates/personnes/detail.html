@@ -1,0 +1,102 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Détails de la personne</title>
+  <link rel="manifest" href="{% static 'manifest.json' %}" />
+  <link rel="stylesheet" href="{% static 'fontawesome/css/all.min.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
+</head>
+<body>
+
+  <!-- Top navigation / header -->
+  <div class="container page-enter" style="position:relative;">
+    <div class="corner-deco" aria-hidden="true"></div>
+    <h2><i class="fas fa-id-card"></i> Fiche de {{ personne.nom }} {{ personne.prenom }}</h2>
+
+    <nav style="display:flex;gap:10px;justify-content:center;margin:8px 0 12px 0;">
+      <a href="{% url 'home' %}" class="btn icon-btn btn-primary" title="Accueil"><i class="fas fa-home"></i></a>
+      <a href="{% url 'liste_personnes' %}" class="btn icon-btn btn-info" title="Liste"><i class="fas fa-list"></i></a>
+      <a href="{% url 'ajouter_personne' %}" class="btn icon-btn btn-success" title="Ajouter"><i class="fas fa-user-plus"></i></a>
+      <a href="#" onclick="navigator.share && navigator.share({title: document.title, text:'Fiche', url: location.href})" class="btn icon-btn" title="Partager"><i class="fas fa-share-alt" style="color:var(--c2)"></i></a>
+    </nav>
+
+    <!-- Card detail -->
+    <div class="card" style="margin-top:6px;">
+      <h3><i class="fas fa-user-circle" style="color:var(--c3)"></i> <span style="color:#082033; font-weight:700">{{ personne.nom }} {{ personne.prenom }}</span></h3>
+      <p style="margin-top:8px; color:var(--muted); font-size:0.95rem;">
+        <i class="fas fa-calendar-alt" style="color:var(--c1); margin-right:8px"></i> Date de naissance: <strong style="color:#122232">{{ personne.date_naissance }}</strong>
+      </p>
+
+      <p style="margin-top:8px; color:var(--muted);">
+        <i class="fas fa-phone" style="color:var(--c2); margin-right:8px"></i> Numéros:
+        {% for num in personne.numeros.all %}
+          <span style="display:inline-block; background:linear-gradient(90deg,rgba(11,65,140,0.07),rgba(123,77,219,0.04)); padding:6px 10px; border-radius:999px; margin:6px 6px 0 6px; font-weight:600; color:#0b2540;">{{ num.numero }}</span>
+        {% endfor %}
+      </p>
+
+      <hr style="border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(0,0,0,0.06),transparent);margin:12px 0;">
+
+      <ul style="list-style:none;padding:0;margin:0;color:var(--muted);font-size:0.95rem;line-height:1.6;">
+        <li><i class="fas fa-flag" style="color:var(--c1); width:20px"></i> <strong>Pays:</strong> {{ personne.pays }}</li>
+        <li><i class="fas fa-map" style="color:var(--c2); width:20px"></i> <strong>Région:</strong> {{ personne.region }}</li>
+        <li><i class="fas fa-map-marker-alt" style="color:var(--c3); width:20px"></i> <strong>District:</strong> {{ personne.district }}</li>
+        <li><i class="fas fa-city" style="color:var(--c1); width:20px"></i> <strong>Commune:</strong> {{ personne.commune }}</li>
+        <li><i class="fas fa-home" style="color:var(--c2); width:20px"></i> <strong>Village:</strong> {{ personne.village }}</li>
+        <li><i class="fas fa-location-arrow" style="color:var(--c3); width:20px"></i> <strong>Adresse:</strong> {{ personne.adresse }}</li>
+      </ul>
+
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <a href="{% url 'modifier_personne' personne.pk %}" class="btn btn-primary" title="Modifier"><i class="fas fa-edit"></i> Modifier</a>
+
+        <form method="POST" action="{% url 'supprimer_personne' personne.pk %}" style="margin:0;">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger" title="Supprimer" onclick="return confirm('Confirmer la suppression ?')"><i class="fas fa-trash"></i> Supprimer</button>
+        </form> <br>
+
+        <a href="{% url 'liste_personnes' %}" class="btn btn-info" title="Retour"><i class="fas fa-arrow-left"></i></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"><i class="fas fa-check-circle"></i><div id="toast-text" style="font-weight:600; margin-left:8px">Action effectuée</div></div>
+
+  <!-- Page loader -->
+  <div id="page-loader" style="display:none; position:fixed; inset:0; background:rgba(6,12,25,0.28); z-index:9998; align-items:center; justify-content:center;">
+    <div style="text-align:center; color:white">
+      <div class="loader"></div>
+      <div style="margin-top:8px; font-weight:700">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Service Worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register("{% static 'js/service-worker.js' %}")
+        .then(() => console.log("Service Worker enregistré"))
+        .catch(err => console.error("Erreur SW:", err));
+    }
+  </script>
+
+  <!-- Micro interactions -->
+  <script>
+    function showToast(text, ok=true){
+      const t = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      txt.textContent = text;
+      t.classList.add('show');
+      t.style.background = ok ? 'linear-gradient(90deg,var(--c1),var(--c2))' : 'linear-gradient(90deg,#ff6b6b,#ff3d5a)';
+      clearTimeout(t._hide);
+      t._hide = setTimeout(()=> t.classList.remove('show'), 2800);
+    }
+
+    // show loader on destructive actions
+    document.querySelector('form[action*="supprimer_personne"]')?.addEventListener('submit', function(){
+      document.getElementById('page-loader').style.display = 'flex';
+    });
+  </script>
+</body>
+</html>

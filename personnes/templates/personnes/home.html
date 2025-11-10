@@ -1,0 +1,350 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Accueil — Collecte Mobile</title>
+  <link rel="manifest" href="{% static 'manifest.json' %}" />
+  <link rel="stylesheet" href="{% static 'fontawesome/css/all.min.css' %}" />
+  <style>
+    :root{
+      --c1:#0f6fc6; --c2:#7b4ddb; --c3:#ff6b6b; --muted:#6b7280;
+      --glass: rgba(255,255,255,0.75); --radius:14px;
+      --shadow-1: 0 6px 18px rgba(8,15,30,0.06); --shadow-2: 0 12px 36px rgba(8,15,30,0.12);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%}
+    body{
+      margin:0;padding:16px;font-family:'Segoe UI',system-ui,-apple-system,Segoe UI,Helvetica,Arial;
+      color:#082033;
+      background: linear-gradient(160deg,var(--c1),var(--c2) 45%,var(--c3) 100%);
+      -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    }
+    /* Centered app shell */
+    .app {
+      max-width:520px;margin:8px auto;padding:18px;border-radius:calc(var(--radius)+6px);
+      background: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,255,255,0.95));
+      box-shadow: var(--shadow-2); position:relative; overflow:visible;
+      backdrop-filter: blur(6px) saturate(1.05); border:1px solid rgba(255,255,255,0.18);
+    }
+    .corner-deco{ position:absolute; right:-24px; top:-24px; width:96px; height:96px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), transparent 40%);
+      transform: rotate(18deg); pointer-events:none;
+    }
+
+    /* Header */
+    .header { display:flex;align-items:center;gap:12px; justify-content:space-between; margin-bottom:6px; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand .logo {
+      width:56px; height:56px; border-radius:12px;
+      background: linear-gradient(135deg,var(--c1),var(--c2));
+      display:grid; place-items:center; color:white; font-weight:800; font-size:20px;
+      box-shadow: 0 8px 24px rgba(8,15,30,0.12);
+    }
+    .brand h1{ margin:0; font-size:1.05rem; color:#042234; }
+    .brand p{ margin:0; font-size:0.82rem; color:var(--muted); }
+
+    /* Stats row */
+    .stats{ display:flex; gap:10px; margin:12px 0 8px 0; }
+    .stat {
+      flex:1; background:linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.99));
+      border-radius:12px; padding:10px; text-align:center; box-shadow:var(--shadow-1); transition:transform .14s ease;
+      position:relative; overflow:visible;
+    }
+    .stat:hover{ transform: translateY(-6px); box-shadow:var(--shadow-2); }
+    .stat .icon {
+      width:48px;height:48px;border-radius:12px;display:grid;place-items:center;margin:0 auto 8px;
+      color:white;font-size:1.1rem;
+    }
+    .stat .n { font-size:1.05rem; font-weight:800; color:#06202b; }
+    .stat .label{ font-size:0.78rem; color:var(--muted); }
+
+    .stat.users .icon{ background: linear-gradient(90deg,var(--c1),var(--c2)); }
+    .stat.fiches .icon{ background: linear-gradient(90deg,#28c76f,#20b66b); }
+    .stat.new .icon{ background: linear-gradient(90deg,#ff6b6b,#ff3d5a); }
+
+    /* Hero decorative area - inline SVG fallback */
+    .hero { margin:10px 0 6px 0; border-radius:12px; overflow:hidden;
+      background: linear-gradient(90deg, rgba(15,111,198,0.08), rgba(123,77,219,0.06));
+      padding:12px; display:flex; gap:12px; align-items:center; box-shadow:var(--shadow-1);
+    }
+    .hero .visual { width:84px; height:84px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg,var(--c1),var(--c2)); color:white; font-size:18px; box-shadow:0 8px 24px rgba(11,25,40,0.12) }
+    .hero .content h2{ margin:0;font-size:1rem;color:#041e2a }
+    .hero .content p{ margin:6px 0 0 0; color:var(--muted); font-size:0.9rem }
+
+    /* Navigation (bottom style inside card) */
+    .nav { display:flex; gap:8px; justify-content:space-around; margin-top:14px; align-items:center; }
+    .nav .navitem {
+      display:flex; flex-direction:column; align-items:center; gap:6px; text-decoration:none; color:#042234;
+      font-size:0.78rem; width:64px;
+    }
+    .nav .btncircle {
+      width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+      color:white;background:linear-gradient(90deg,var(--c1),var(--c2)); box-shadow:0 8px 24px rgba(8,15,30,0.12);
+      transition: transform .12s ease;
+    }
+    .nav .btncircle:active{ transform: scale(.97); }
+
+    /* Floating quick actions (bottom-right) */
+    .fab {
+      position:fixed; right:18px; bottom:18px; z-index:999;
+      width:60px;height:60px;border-radius:50%;display:grid;place-items:center;
+      background: linear-gradient(90deg,#ff8a7a,#ff6b6b); color:white; box-shadow:0 18px 40px rgba(8,15,30,0.18);
+    }
+
+    /* Toast */
+    .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:9999;
+      background: linear-gradient(90deg,var(--c1),var(--c2)); color:white; padding:10px 16px; border-radius:999px;
+      display:flex; gap:10px; align-items:center; box-shadow:0 10px 30px rgba(8,15,30,0.18); opacity:0; pointer-events:none; transition: opacity .18s ease, bottom .18s ease;
+    }
+    .toast.show{ opacity:1; bottom:36px; pointer-events:auto; }
+
+    /* Loader overlay */
+    .loader-overlay { display:none; position:fixed; inset:0; background:rgba(6,12,25,0.28); z-index:9998; align-items:center; justify-content:center; }
+    .spinner { width:44px;height:44px;border-radius:50%; border:4px solid rgba(255,255,255,0.16); border-top-color:white; animation:spin .9s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+
+    /* small responsive tweaks */
+    @media(min-width:768px){ body{padding:24px} .app{max-width:720px;padding:24px} .stats{gap:14px} }
+  </style>
+</head>
+<body>
+
+  <div class="app page-enter" role="application" aria-label="Accueil Collecte">
+    <div class="corner-deco" aria-hidden="true"></div>
+
+    <!-- Header / brand -->
+    <div class="header">
+      <div class="brand">
+        <div class="logo">CM</div>
+        <div>
+          <h1>Collecte Mobile</h1>
+          <p>Rapide • Offline • Fiable</p>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a href="{% url 'liste_personnes' %}" class="btn btn-info" title="Liste"><i class="fas fa-list"></i></a>
+        <a href="{% url 'ajouter_personne' %}" class="btn btn-success" title="Ajouter"><i class="fas fa-user-plus"></i></a>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats" aria-hidden="false">
+      <div class="stat users" id="stat-users" title="Nombre de personnes">
+        <div class="icon"><i class="fas fa-users"></i></div>
+        <div class="n" id="count-users">—</div>
+        <div class="label">Personnes</div>
+      </div>
+
+      <div class="stat fiches" id="stat-fiches" title="Fiches totales">
+        <div class="icon"><i class="fas fa-book"></i></div>
+        <div class="n" id="count-fiches">—</div>
+        <div class="label">Fiches</div>
+      </div>
+
+      <div class="stat new" id="stat-new" title="Nouveaux aujourd'hui">
+        <div class="icon"><i class="fas fa-plus"></i></div>
+        <div class="n" id="count-new">—</div>
+        <div class="label">Nouveaux</div>
+      </div>
+    </div>
+
+    <!-- Hero decorative area (inline SVG fallback if you don't want external image) -->
+    <div class="hero" role="img" aria-label="Illustration accueil">
+      <div class="visual"><i class="fas fa-compass"></i></div>
+      <div class="content">
+        <h2>Bienvenue — Commencez la collecte</h2>
+        <p>Travaillez hors-ligne. Synchronisation intelligente. Interface tactile et rapide.</p>
+      </div>
+    </div>
+
+    <!-- Quick access cards -->
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+      <a href="{% url 'liste_personnes' %}" class="stat" style="flex:1;min-width:150px;">
+        <div class="icon" style="background:linear-gradient(90deg,#17a2b8,#0ea5a4)"><i class="fas fa-search"></i></div>
+        <div class="n">Rechercher</div>
+        <div class="label">Trouver une fiche</div>
+      </a>
+
+      <a href="{% url 'ajouter_personne' %}" class="stat" style="flex:1;min-width:150px;">
+        <div class="icon" style="background:linear-gradient(90deg,#ff8a7a,#ff6b6b)"><i class="fas fa-user-plus"></i></div>
+        <div class="n">Ajouter</div>
+        <div class="label">Nouvelle personne</div>
+      </a>
+    </div>
+
+    <!-- Bottom nav (inside card) -->
+    <div class="nav" role="navigation" aria-label="Navigation principale">
+      <a href="{% url 'home' %}" class="navitem"><div class="btncircle"><i class="fas fa-home"></i></div><div>Accueil</div></a>
+      <a href="{% url 'liste_personnes' %}" class="navitem"><div class="btncircle" style="background:linear-gradient(90deg,#17a2b8,#0ea5a4)"><i class="fas fa-list"></i></div><div>Liste</div></a>
+      <a href="{% url 'ajouter_personne' %}" class="navitem"><div class="btncircle" style="background:linear-gradient(90deg,#28c76f,#20b66b)"><i class="fas fa-user-plus"></i></div><div>Ajouter</div></a>
+      <a href="#" class="navitem" onclick="navigator.share && navigator.share({title:document.title,text:'Partager',url:location.href})"><div class="btncircle" style="background:linear-gradient(90deg,var(--c1),var(--c2))"><i class="fas fa-share-alt"></i></div><div>Partager</div></a>
+    </div>
+  </div>
+
+  <!-- Floating action button (quick add) -->
+  <a href="{% url 'ajouter_personne' %}" class="fab" title="Ajouter une personne">
+    <i class="fas fa-plus" style="font-size:20px"></i>
+  </a>
+
+  <!-- Toast and loader -->
+  <div id="toast" class="toast" role="status" aria-live="polite"><i class="fas fa-check-circle"></i><div id="toast-text" style="font-weight:700">Prêt</div></div>
+  <div id="loader" class="loader-overlay"><div class="spinner"></div></div>
+
+  <!-- Inline JS pour interactions, offline counters et animations -->
+  <script>
+    // Service worker (kept)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register("{% static 'js/service-worker.js' %}")
+        .then(()=>console.log('SW enregistré'))
+        .catch(()=>console.warn('SW erreur'));
+    }
+
+    // Toast helper
+    function showToast(text, ok=true){
+      const t = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      txt.textContent = text;
+      t.classList.add('show');
+      t.style.background = ok ? 'linear-gradient(90deg,var(--c1),var(--c2))' : 'linear-gradient(90deg,#ff6b6b,#ff3d5a)';
+      clearTimeout(t._hide);
+      t._hide = setTimeout(()=> t.classList.remove('show'), 2800);
+    }
+
+    // Loader control
+    function showLoader(on=true){
+      const l = document.getElementById('loader');
+      l.style.display = on ? 'flex' : 'none';
+    }
+
+    // Counters: offline-first, read server variables if available, fallback to localStorage, no network calls
+    (function initCounters(){
+      try {
+        const STORAGE_KEY = 'cm_counters';
+        const DURATION = 700;
+        const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+        function animate(el, from, to) {
+          const start = from;
+          const delta = to - start;
+          const t0 = performance.now();
+          function frame(now) {
+            const p = Math.min(1, (now - t0) / DURATION);
+            el.textContent = Math.round(start + delta * easeOut(p));
+            if (p < 1) requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        }
+
+        function applyCounts(obj, animateFlag = true){
+          const map = [
+            { sel:'#count-users', val: parseInt(obj.total_personnes || 0, 10) },
+            { sel:'#count-fiches', val: parseInt(obj.total_fiches || 0, 10) },
+            { sel:'#count-new', val: parseInt(obj.nouveaux || 0, 10) }
+          ];
+          map.forEach(m=>{
+            const el = document.querySelector(m.sel);
+            if (!el) return;
+            const cur = parseInt(el.textContent.replace(/\D/g,'')) || 0;
+            if (animateFlag) animate(el, cur, m.val);
+            else el.textContent = m.val;
+            el.setAttribute('data-value', m.val);
+          });
+        }
+
+        function saveLocal(obj){
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.assign({}, obj, {ts: Date.now()}))); }
+          catch(e){ /* ignore storage errors */ }
+        }
+        function readLocal(){
+          try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; }
+          catch(e){ return null; }
+        }
+
+        // Server values injected directly into the script (no DOM change required)
+        // If your template provides these context variables, they will be used.
+        const serverValues = {
+          total_personnes: {% if total_personnes is not None %}{{ total_personnes }}{% else %}null{% endif %},
+          total_fiches: {% if total_fiches is not None %}{{ total_fiches }}{% else %}null{% endif %},
+          nouveaux: {% if nouveaux is not None %}{{ nouveaux }}{% else %}null{% endif %}
+        };
+
+        // Determine source: prefer server-provided numeric values; else localStorage; else defaults
+        const local = readLocal();
+
+        const hasServer = Number.isFinite(serverValues.total_personnes) || Number.isFinite(serverValues.total_fiches) || Number.isFinite(serverValues.nouveaux);
+
+        if (hasServer) {
+          // normalize nulls to zeros
+          const use = {
+            total_personnes: Number.isFinite(serverValues.total_personnes) ? serverValues.total_personnes : 0,
+            total_fiches: Number.isFinite(serverValues.total_fiches) ? serverValues.total_fiches : 0,
+            nouveaux: Number.isFinite(serverValues.nouveaux) ? serverValues.nouveaux : 0
+          };
+          applyCounts(use, true);
+          saveLocal(use);
+        } else if (local) {
+          applyCounts(local, false);
+        } else {
+          applyCounts({ total_personnes:0, total_fiches:0, nouveaux:0 }, false);
+        }
+
+        // Expose helper to update counts locally when the app makes changes offline
+        window.updateLocalCounts = function(newCounts){
+          const prev = {
+            total_personnes: parseInt(document.getElementById('count-users')?.textContent.replace(/\D/g,'') || '0',10),
+            total_fiches: parseInt(document.getElementById('count-fiches')?.textContent.replace(/\D/g,'') || '0',10),
+            nouveaux: parseInt(document.getElementById('count-new')?.textContent.replace(/\D/g,'') || '0',10)
+          };
+          const merged = Object.assign({}, prev, newCounts);
+          applyCounts(merged, true);
+          saveLocal(merged);
+        };
+
+        // subtle pulse on load
+        ['count-users','count-fiches','count-new'].forEach(id=>{
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.animate([{ transform:'scale(.98)' },{ transform:'scale(1.03)' },{ transform:'scale(1)' }], { duration:600, easing:'cubic-bezier(.2,.9,.3,1)' });
+        });
+
+      } catch(e){
+        console.warn('Counters init error', e);
+      }
+    })();
+
+    // Decorative: animated icons pulse loop
+    (function animateIcons(){
+      const icons = document.querySelectorAll('.stat .icon i, .brand .logo, .hero .visual i');
+      icons.forEach((el, i)=>{
+        const delay = 300 + i*120;
+        setTimeout(()=> {
+          el.animate([{ transform:'scale(.96)' },{ transform:'scale(1.06)' },{ transform:'scale(1)' }], { duration:1400, iterations: Infinity, easing:'ease-in-out' });
+        }, delay);
+      });
+    })();
+
+    // Page enter reveal
+    document.querySelectorAll('.page-enter').forEach(el=>{
+      el.animate([{ opacity:0, transform:'translateY(8px) scale(.997)' },{ opacity:1, transform:'translateY(0) scale(1)' }], { duration:420, easing:'cubic-bezier(.2,.9,.3,1)' });
+    });
+
+    // Quick offline demo: save counters to localStorage on click (simulates changes)
+    document.querySelectorAll('.stat').forEach(s=>{
+      s.addEventListener('click', ()=>{
+        const key = s.id.replace('stat-','count-');
+        showToast('Aperçu rapide', true);
+      });
+    });
+
+    // Share hint: if Web Share not available, show toast
+    document.querySelectorAll('[onclick^="navigator.share"]').forEach(n=>{
+      n.addEventListener('click', (e)=>{
+        if(!navigator.share){ e.preventDefault(); showToast('Partage non supporté sur cet appareil', false); }
+      });
+    });
+  </script>
+</body>
+</html>

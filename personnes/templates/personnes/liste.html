@@ -1,0 +1,402 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liste des personnes</title>
+
+  <link rel="manifest" href="{% static 'manifest.json' %}" />
+  <link rel="stylesheet" href="{% static 'fontawesome/css/all.min.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/styled.css' %}" />
+
+  <style>
+    /* Petits overrides page-specific (mobile-friendly, léger) */
+    .top-icons { display:flex; gap:10px; justify-content:center; margin:8px 0 12px 0; }
+    .icon-btn.white-inside{ background:#fff !important; color:var(--c1) !important; box-shadow:0 6px 18px rgba(11,25,40,0.06); }
+    .search-bar{ display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+    .search-bar input[type="text"]{ flex:1; padding:10px 14px; border-radius:10px; border:1px solid rgba(11,25,40,0.06) }
+    .sort-row{ display:flex; gap:8px; align-items:center; justify-content:center; margin:8px 0 6px; flex-wrap:wrap}
+    .small-select{ height:44px; padding:8px 10px; border-radius:10px; }
+    .list-card { margin-bottom:12px; } /* keep original .card styling from styles.css */
+    /* reduce heavy visual paint while moving nodes */
+    .reduce-render * { transition:none !important; box-shadow:none !important; filter:none !important; }
+
+    /* Masque les anciens enregistrements lorsqu'on est en mode "récents" */
+    .list-card.hidden-old,
+    .card.list-card.hidden-old {
+      display: none !important;
+    }
+
+    @media(max-width:420px){ .top-icons{ gap:8px } .search-bar button{ width:44px; height:44px; } }
+  </style>
+
+  <!-- Top navigation / header -->
+  <div class="container page-enter" style="position:relative;">
+    <div class="corner-deco" aria-hidden="true"></div>
+
+    <nav class="top-icons" aria-label="Navigation principale">
+      <a href="{% url 'home' %}" class="icon-btn white-inside" title="Accueil" aria-label="Accueil"><i class="fas fa-home"></i></a>
+      <a href="{% url 'liste_personnes' %}" class="icon-btn white-inside" title="Liste" aria-label="Liste"><i class="fas fa-list"></i></a>
+      <a href="{% url 'ajouter_personne' %}" class="icon-btn white-inside" title="Ajouter" aria-label="Ajouter"><i class="fas fa-user-plus"></i></a>
+      <a href="#" onclick="navigator.share && navigator.share({title: document.title, text:'Liste', url: location.href})" class="icon-btn" title="Partager" aria-label="Partager" style="background:rgba(255,255,255,0.10);color:#fff"><i class="fas fa-share-alt"></i></a>
+    </nav>
+
+    <!-- Search + sort controls -->
+    <div class="search-bar" role="search" aria-label="Recherche personnes">
+      <i class="fas fa-search" style="margin-left:6px;color:var(--muted)"></i>
+      <input id="searchInput" type="text" name="q" placeholder="Rechercher par nom, prénom ou numéro..." value="{{ request.GET.q }}" aria-label="Recherche" />
+      <button id="clearSearch" class="btn btn-primary" title="Effacer recherche" aria-label="Effacer recherche"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="sort-row" role="region" aria-label="Tri">
+      <select id="sortMode" class="small-select" aria-label="Mode de tri">
+        <option value="recent">Tri : plus récent</option>
+        <option value="oldest">Tri : plus ancien</option>
+        <option value="fav">Tri : favoris d'abord</option>
+      </select>
+      <button id="applySort" class="btn btn-info" title="Appliquer tri" aria-label="Appliquer tri"><i class="fas fa-sort"></i></button>
+      <button id="show-all" class="btn" title="Afficher tous les enregistrements" aria-label="Afficher tous" style="color: rgb(65, 65, 243)"><i class="fas fa-list" style="color: rgb(65, 65, 243)"></i> Tout</button>
+      <div style="margin-left:auto;color:var(--muted)" id="view-mode-label">Affichage : récents</div>
+    </div>
+
+    <!-- List -->
+    <section id="peopleList" aria-live="polite">
+      {% for personne in personnes %}
+        <article class="card list-card page-enter" role="listitem"
+                 data-pk="{{ personne.pk }}"
+                 data-nom="{{ personne.nom|lower }}"
+                 data-prenom="{{ personne.prenom|lower }}"
+                 data-raw="{% for num in personne.numeros.all %}{{ num.numero }} {% endfor %} {{ personne.nom }} {{ personne.prenom }}">
+          <h3><i class="fas fa-user" style="color:var(--c1); margin-right:8px"></i> {{ personne.nom }} {{ personne.prenom }}</h3>
+
+          <p style="margin-top:6px; color:var(--muted);">
+            <i class="fas fa-phone" style="color:var(--c2); margin-right:8px"></i>
+            {% for num in personne.numeros.all %}
+              <span style="margin-right:6px; font-weight:600; color:#0b2540">{{ num.numero }}</span>{% if not forloop.last %},{% endif %}
+            {% endfor %}
+          </p>
+
+          <div class="card-meta" style="margin-top:8px;"></div>
+
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+            <a href="{% url 'detail_personne' personne.pk %}" class="btn btn-info" title="Voir fiche"><i class="fas fa-file-alt"></i> Voir la fiche</a>
+            <a href="{% url 'modifier_personne' personne.pk %}" class="btn btn-primary" title="Modifier"><i class="fas fa-edit"></i> Modifier</a>
+            <form method="POST" action="{% url 'supprimer_personne' personne.pk %}" class="delete-form" style="margin:0;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger delete-btn" title="Supprimer" aria-label="Supprimer {{ personne.nom }} {{ personne.prenom }}"><i class="fas fa-trash"></i> Supprimer</button>
+            </form>
+          </div>
+        </article>
+      {% empty %}
+        <p class="animated fadeIn" style="text-align:center; color:var(--muted);"><i class="fas fa-exclamation-circle" style="color:var(--c3)"></i> Aucun résultat trouvé.</p>
+      {% endfor %}
+    </section>
+
+    <a href="{% url 'ajouter_personne' %}" class="btn btn-success" style="margin-top:14px;"><i class="fas fa-user-plus"></i> Ajouter une personne</a>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"><i class="fas fa-check-circle"></i><div id="toast-text" style="font-weight:600; margin-left:8px">Action effectuée</div></div>
+
+  <!-- Page loader -->
+  <div id="page-loader" style="display:none; position:fixed; inset:0; background:rgba(6,12,25,0.28); z-index:9998; align-items:center; justify-content:center;">
+    <div style="text-align:center; color:white">
+      <div class="loader"></div>
+      <div style="margin-top:8px; font-weight:700">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Floating quick nav buttons (ne perturbe pas le flux) -->
+  <style>
+    .floating-controls { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; z-index:99999; }
+    .floating-controls .fab {
+      width:46px; height:46px; border-radius:10px; display:inline-grid; place-items:center;
+      background:linear-gradient(180deg,var(--c1,#007bff),#0056b3); color:#fff; border:0; cursor:pointer; box-shadow:0 8px 20px rgba(2,6,23,0.18);
+    }
+    .floating-controls .fab.secondary { background:linear-gradient(180deg,#fff,#f3f4f6); color:#111; }
+    @media(max-width:420px){ .floating-controls{ right:12px; bottom:12px } .floating-controls .fab{ width:42px; height:42px } }
+  </style>
+
+  <div class="floating-controls" role="navigation" aria-label="Navigation rapide">
+    <button id="fab-top" class="fab" title="Aller en haut" aria-label="Aller en haut"><i class="fas fa-arrow-up"></i></button>
+    <button id="fab-bottom" class="fab secondary" title="Aller au dernier" aria-label="Aller au dernier"><i class="fas fa-arrow-down"></i></button>
+  </div>
+
+</main>
+
+<!-- Service worker registration: prefer root /service-worker.js for correct scope -->
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(() => console.log("Service Worker enregistré"))
+      .catch(err => console.error("Erreur SW:", err));
+  }
+</script>
+
+<!-- Client-side interactions: search, simple sort, favorites, date, safe delete, persistent sort + floating buttons -->
+<script>
+  (function(){
+    const STORAGE_DATE = 'app_dates_v2';
+    const STORAGE_FAV  = 'app_favs_v2';
+    const STORAGE_SORT = 'personne_list_sort_v1';
+    const STORAGE_SHOW_ALL = 'personne_list_show_all_v1';
+    const MAX_VISIBLE_RECENTS = 20;
+
+    let dates = {};
+    let favs = {};
+    try { dates = JSON.parse(localStorage.getItem(STORAGE_DATE) || '{}'); } catch(e){}
+    try { favs  = JSON.parse(localStorage.getItem(STORAGE_FAV)  || '{}'); } catch(e){}
+
+    const list = document.getElementById('peopleList');
+    const toastEl = document.getElementById('toast');
+    const toastTxt = document.getElementById('toast-text');
+    const loader = document.getElementById('page-loader');
+
+    function showToast(msg, ok=true){
+      if(!toastEl) return;
+      toastTxt.textContent = msg;
+      toastEl.classList.add('show');
+      toastEl.style.background = ok ? 'linear-gradient(90deg,var(--c1),var(--c2))' : 'linear-gradient(90deg,#ff6b6b,#ff3d5a)';
+      clearTimeout(toastEl._hide);
+      toastEl._hide = setTimeout(()=> toastEl.classList.remove('show'), 2000);
+    }
+
+    // inject date + favorite button on each card (once)
+    function ensureMeta(){
+      const cards = Array.from(list.querySelectorAll('.list-card, .card.list-card'));
+      let changed = false;
+      cards.forEach(card => {
+        const pk = card.getAttribute('data-pk');
+        if(!pk) return;
+        if(!dates[pk]) { dates[pk] = new Date().toISOString(); changed = true; }
+        let meta = card.querySelector('.card-meta');
+        if(!meta) {
+          meta = document.createElement('div');
+          meta.className = 'card-meta';
+          card.insertBefore(meta, card.querySelector('div[style*="display:flex"]') || null);
+        }
+        // date badge
+        if(!meta.querySelector('.card-date')){
+          const dateSpan = document.createElement('span');
+          dateSpan.className = 'card-date';
+          dateSpan.textContent = new Date(dates[pk]).toLocaleString();
+          dateSpan.title = dates[pk];
+          meta.appendChild(dateSpan);
+        } else {
+          meta.querySelector('.card-date').textContent = new Date(dates[pk]).toLocaleString();
+        }
+        // favorite toggle
+        if(!meta.querySelector('.favorite-toggle')){
+          const favBtn = document.createElement('button');
+          favBtn.type = 'button';
+          favBtn.className = 'favorite-toggle';
+          favBtn.title = 'Favori';
+          favBtn.innerHTML = favs[pk] ? '<i class="fas fa-star"></i>' : '<i class="far fa-star"></i>';
+          if(favs[pk]) favBtn.classList.add('favorited');
+          favBtn.addEventListener('click', () => {
+            if(favs[pk]) { delete favs[pk]; favBtn.classList.remove('favorited'); favBtn.innerHTML = '<i class="far fa-star"></i>'; showToast('Retiré des favoris', true); }
+            else { favs[pk] = true; favBtn.classList.add('favorited'); favBtn.innerHTML = '<i class="fas fa-star"></i>'; showToast('Ajouté aux favoris', true); }
+            try { localStorage.setItem(STORAGE_FAV, JSON.stringify(favs)); } catch(e){}
+          });
+          meta.appendChild(favBtn);
+        } else {
+          const favBtn = meta.querySelector('.favorite-toggle');
+          favBtn.innerHTML = favs[pk] ? '<i class="fas fa-star"></i>' : '<i class="far fa-star"></i>';
+          favBtn.classList.toggle('favorited', !!favs[pk]);
+        }
+      });
+      if(changed){
+        try { localStorage.setItem(STORAGE_DATE, JSON.stringify(dates)); } catch(e){}
+      }
+    }
+
+    // Debounce helper
+    function debounce(fn, wait){ let t; return (...a) => { clearTimeout(t); t = setTimeout(()=> fn(...a), wait); }; }
+
+    // Search on data-nom, data-prenom, data-raw (lowercased in attributes)
+    function applySearch(q){
+      q = (q || '').trim().toLowerCase();
+      const cards = Array.from(list.querySelectorAll('.list-card, .card.list-card'));
+      cards.forEach(card => {
+        const nom = card.getAttribute('data-nom') || '';
+        const prenom = card.getAttribute('data-prenom') || '';
+        const raw = (card.getAttribute('data-raw') || '').toLowerCase();
+        const visible = !q || nom.includes(q) || prenom.includes(q) || raw.includes(q);
+        card.style.display = visible ? '' : 'none';
+      });
+    }
+
+    const debouncedSearch = debounce((val) => {
+      document.body.classList.add('reduce-render');
+      applySearch(val);
+      setTimeout(()=> document.body.classList.remove('reduce-render'), 180);
+      // after search, reapply visibility so recents logic counts visible cards
+      applyVisibility();
+    }, 180);
+
+    // Sorting using DocumentFragment to minimize reflow. Keep it simple and guarded.
+    function applySort(mode){
+      const cards = Array.from(list.querySelectorAll('.list-card, .card.list-card')).filter(c => c.style.display !== 'none');
+      if(cards.length <= 1) return;
+      const mapped = cards.map(c => {
+        const pk = c.getAttribute('data-pk');
+        return {
+          el: c,
+          date: new Date(dates[pk] || new Date()),
+          fav: !!favs[pk],
+          title: ((c.getAttribute('data-nom') || '') + ' ' + (c.getAttribute('data-prenom') || '')).trim()
+        };
+      });
+
+      if(mode === 'recent') mapped.sort((a,b) => b.date - a.date);
+      else if(mode === 'oldest') mapped.sort((a,b) => a.date - b.date);
+      else if(mode === 'fav') mapped.sort((a,b) => {
+        if(a.fav === b.fav) return b.date - a.date;
+        return a.fav ? -1 : 1;
+      });
+
+      const frag = document.createDocumentFragment();
+      mapped.forEach(m => frag.appendChild(m.el));
+
+      document.body.classList.add('reduce-render');
+      list.appendChild(frag);
+      setTimeout(()=> document.body.classList.remove('reduce-render'), 120);
+      showToast('Tri appliqué', true);
+    }
+
+    // Safe delete: native confirm then submit; show loader while waiting
+    function wireDeleteConfirm(){
+      document.querySelectorAll('form.delete-form').forEach(form => {
+        if(form.dataset.wired === '1') return;
+        form.dataset.wired = '1';
+        form.addEventListener('submit', function(ev){
+          ev.preventDefault();
+          const card = this.closest('.list-card') || this.closest('.card');
+          const name = (card && card.querySelector('h3')) ? card.querySelector('h3').textContent.trim() : 'cette fiche';
+          if(confirm(`Voulez-vous supprimer ${name} ?`)){
+            if(loader) loader.style.display = 'flex';
+            const btn = this.querySelector('button[type="submit"]');
+            if(btn) btn.disabled = true;
+            this.submit();
+          } else {
+            showToast('Suppression annulée', 'info');
+          }
+        }, {passive:false});
+      });
+    }
+
+    // ---------- Persistant tri + affichage récents ----------
+    function savePref(key, val){
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){}
+    }
+    function loadPref(key, fallback){
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }
+    }
+
+    function applyVisibility(){
+      const cards = Array.from(list.querySelectorAll('.list-card, .card.list-card'));
+      const showAll = !!loadPref(STORAGE_SHOW_ALL, false);
+      if(showAll){
+        cards.forEach(c => c.classList.remove('hidden-old'));
+        const label = document.getElementById('view-mode-label');
+        if(label) label.textContent = 'Affichage : tous';
+        return;
+      }
+      const visibleCards = cards.filter(c => c.style.display !== 'none');
+      visibleCards.forEach((c, idx) => {
+        if(idx < MAX_VISIBLE_RECENTS) c.classList.remove('hidden-old');
+        else c.classList.add('hidden-old');
+      });
+      const label = document.getElementById('view-mode-label');
+      if(label) label.textContent = 'Affichage : récents';
+    }
+
+    function applySortAndPersist(mode){
+      savePref(STORAGE_SORT, mode);
+      applySort(mode);
+      applyVisibility();
+    }
+
+    function applyStoredSort(){
+      const pref = loadPref(STORAGE_SORT, 'recent');
+      const sel = document.getElementById('sortMode');
+      if(sel) sel.value = pref;
+      applySort(pref);
+      applyVisibility();
+    }
+
+    // Floating buttons behaviour
+    function wireFloatingButtons(){
+      const fabTop = document.getElementById('fab-top');
+      const fabBottom = document.getElementById('fab-bottom');
+      if(fabTop) fabTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      if(fabBottom) fabBottom.addEventListener('click', () => {
+        const cards = Array.from(list.querySelectorAll('.list-card, .card.list-card')).filter(c => c.style.display !== 'none' && !c.classList.contains('hidden-old'));
+        const target = (cards.length ? cards[cards.length - 1] : Array.from(list.querySelectorAll('.list-card, .card.list-card')).pop());
+        if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+
+    // init wiring
+    function init(){
+      ensureMeta();
+      wireDeleteConfirm();
+
+      // search input
+      const searchInput = document.getElementById('searchInput');
+      if(searchInput){
+        searchInput.addEventListener('input', (e) => debouncedSearch(e.target.value));
+      }
+      document.getElementById('clearSearch')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const si = document.getElementById('searchInput');
+        if(si){ si.value = ''; applySearch(''); showToast('Recherche effacée', true); applyVisibility(); }
+      });
+
+      document.getElementById('applySort')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const mode = document.getElementById('sortMode')?.value || 'recent';
+        applySortAndPersist(mode);
+      });
+
+      document.getElementById('show-all')?.addEventListener('click', (e) => {
+        const currently = !!loadPref(STORAGE_SHOW_ALL, false);
+        savePref(STORAGE_SHOW_ALL, !currently);
+        applyVisibility();
+        showToast(!currently ? 'Affichage : tous' : 'Affichage : récents');
+      });
+
+      // observe additions (if the server returns the same page after operations)
+      new MutationObserver(muts => {
+        if(muts.some(m => m.addedNodes && m.addedNodes.length)) {
+          ensureMeta();
+          wireDeleteConfirm();
+        }
+      }).observe(list, { childList: true, subtree: false });
+
+      // wire floating buttons
+      wireFloatingButtons();
+
+      // re-enable UI when page reloads after POST which returned same page
+      window.addEventListener('load', () => {
+        if(loader && loader.style.display === 'flex'){
+          setTimeout(()=> { loader.style.display = 'none'; document.querySelectorAll('form.delete-form').forEach(f=>{ f.dataset.submitting = '0'; const b=f.querySelector('button[type=\"submit\"]'); if(b){ b.disabled=false; } }); }, 400);
+        }
+      });
+
+      // apply persisted prefs
+      applyStoredSort();
+
+    }
+
+    // start
+    init();
+
+    // expose for debug
+    window._people = { applySort, applySearch, ensureMeta, applyVisibility };
+  })();
+</script>
+
+</body>
+</html>

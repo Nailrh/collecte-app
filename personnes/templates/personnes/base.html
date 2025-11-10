@@ -1,0 +1,44 @@
+{% load static %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Collecte Mobile{% endblock %}</title>
+
+  <!-- Manifest & icons -->
+  <link rel="manifest" href="{% static 'manifest.json' %}">
+  <link rel="apple-touch-icon" sizes="192x192" href="{% static 'icons/icon-192.png' %}">
+  <meta name="theme-color" content="#007bff">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'css/styled.css' %}">
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  {% block content %}{% endblock %}
+
+  <!-- Toast / feedback container (for toasts from JS) -->
+  <div id="toast" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1200;display:none"></div>
+
+  <!-- Scripts -->
+  <script src="{% static 'js/indexeddb.js' %}"></script>
+  <script>
+    // registration service worker (attempt only if supported)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('{% static "service-worker.js" %}')
+          .then(reg => {
+            // ask waiting SW to activate immediately if updating
+            if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          })
+          .catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,393 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ajouter une personne</title>
+  <link rel="manifest" href="{% static 'manifest.json' %}" />
+  <link rel="stylesheet" href="{% static 'fontawesome/css/all.min.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/styled.css' %}" />
+  <style>
+    /* Minimal additions to integrate with your styles */
+    .field-error {
+      color:#9b2c2c;
+      background:#fff1f0;
+      padding:6px 10px;
+      border-radius:8px;
+      font-size:0.9rem;
+      margin-top:8px;
+    }
+    .form-control.invalid {
+      border-color: #ff4d4f !important;
+      box-shadow: 0 6px 18px rgba(255,77,79,0.06) !important;
+      background: linear-gradient(180deg, rgba(255,245,245,0.96), rgba(255,250,250,0.98));
+    }
+    .input-icon-left { position:relative; }
+    .input-icon-left .input-icon {
+      position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:1rem; pointer-events:none;
+    }
+    .input-icon-left .form-control { padding-left:44px; }
+    /* small helper for disabled interactivity when saving */
+    .muted-while-saving { pointer-events:none; opacity:0.6; }
+  </style>
+</head>
+<body>
+
+  <!-- Top navigation / header (mobile-first, tactile icons) -->
+  <div class="container page-enter" aria-hidden="false" style="position:relative;">
+    <div class="corner-deco" aria-hidden="true"></div>
+    <h2><i class="fas fa-user-plus" aria-hidden="true"></i> Ajouter une personne</h2>
+
+    <nav style="display:flex;gap:10px;justify-content:center;margin:8px 0 12px 0;">
+      <a href="{% url 'home' %}" class="btn icon-btn btn-primary" title="Accueil"><i class="fas fa-home" aria-hidden="true"></i></a>
+      <a href="{% url 'liste_personnes' %}" class="btn icon-btn btn-info" title="Liste"><i class="fas fa-list" aria-hidden="true"></i></a>
+      <a href="{% url 'ajouter_personne' %}" class="btn icon-btn btn-success" title="Ajouter"><i class="fas fa-user-plus" aria-hidden="true"></i></a>
+      <a href="#" onclick="navigator.share && navigator.share({title:document.title,text:'Partager',url:location.href})" class="btn icon-btn" title="Partager"><i class="fas fa-share-alt" style="color:var(--c2)" aria-hidden="true"></i></a>
+    </nav>
+
+    <!-- Form -->
+    <form method="POST" id="ajoutForm" class="page-enter" novalidate>
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label><i class="fas fa-user" aria-hidden="true"></i> Nom <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="nom" id="nom" oninput="this.value = this.value.toUpperCase()" required aria-required="true" aria-label="Nom" placeholder="Ex: RAKOTO" />
+        <div class="field-error hidden" data-for="nom" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-user-tag" aria-hidden="true"></i> Prénom <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="prenom" id="prenom" required aria-required="true" aria-label="Prénom" placeholder="Ex: Jean" />
+        <div class="field-error hidden" data-for="prenom" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-calendar-alt" aria-hidden="true"></i> Date de naissance <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="date" name="date_naissance" id="date_naissance" required aria-required="true" aria-label="Date de naissance" />
+        <div class="field-error hidden" data-for="date_naissance" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div id="numeros" class="form-group" style="position:relative;">
+        <label><i class="fas fa-phone" aria-hidden="true"></i> Numéros <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <!-- helper icon absolute left for first input; inputs will carry .input-icon-left wrapper -->
+        <div class="input-icon-left">
+          <i class="fas fa-phone input-icon" aria-hidden="true"></i>
+          <input class="form-control" type="tel" name="numero_1" id="numero_1" pattern="[0-9]{10}" inputmode="numeric" required aria-required="true" aria-label="Numéro 1" placeholder="Ex : 0331234567" />
+        </div>
+        <div class="field-error hidden" data-for="numero" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <button type="button" id="addNumberBtn" class="btn btn-info" onclick="ajouterNumero()" title="Ajouter un numéro"><i class="fas fa-plus" aria-hidden="true"></i></button>
+        <button type="button" id="rmNumberBtn" class="btn btn-primary" onclick="collapseLastNumber()" title="Retirer dernier numéro"><i class="fas fa-minus" aria-hidden="true"></i></button>
+        <div style="flex:1"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-flag" aria-hidden="true"></i> Pays <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="pays" id="pays" required aria-required="true" aria-label="Pays" placeholder="Ex : Madagascar" />
+        <div class="field-error hidden" data-for="pays" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-map" aria-hidden="true"></i> Région <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="region" id="region" required aria-required="true" aria-label="Région" placeholder="Ex : Analamanga" />
+        <div class="field-error hidden" data-for="region" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-map-marker-alt" aria-hidden="true"></i> District <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="district" id="district" required aria-required="true" aria-label="District" placeholder="Ex : Antananarivo" />
+        <div class="field-error hidden" data-for="district" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-city" aria-hidden="true"></i> Commune <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="commune" id="commune" required aria-required="true" aria-label="Commune" placeholder="Ex : Isoraka" />
+        <div class="field-error hidden" data-for="commune" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-home" aria-hidden="true"></i> Village (Fokontany) <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <input class="form-control" type="text" name="village" id="village" required aria-required="true" aria-label="Village" placeholder="Ex : Fokontany X" />
+        <div class="field-error hidden" data-for="village" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-location-arrow" aria-hidden="true"></i> Adresse <span style="color:#ff4d4f; margin-left:6px">*</span></label>
+        <textarea class="form-control" name="adresse" id="adresse" rows="2" required aria-required="true" aria-label="Adresse" placeholder="Ex : Rue ..."></textarea>
+        <div class="field-error hidden" data-for="adresse" role="alert" aria-live="assertive"></div>
+      </div>
+
+      <button type="submit" class="btn btn-success" id="saveBtn" aria-label="Enregistrer">
+        <i class="fas fa-save" aria-hidden="true"></i> Enregistrer
+      </button>
+    </form>
+  </div>
+
+  <!-- Page loader (hidden by default) -->
+  <div id="page-loader" style="display:none; position:fixed; inset:0; background:rgba(6,12,25,0.28); z-index:9998; align-items:center; justify-content:center;">
+    <div style="text-align:center; color:white">
+      <div class="loader"></div>
+      <div style="margin-top:8px; font-weight:700">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"><i class="fas fa-check-circle" aria-hidden="true"></i><div id="toast-text" style="font-weight:600; margin-left:8px">Action effectuée</div></div>
+
+  <!-- Service Worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register("{% static 'js/service-worker.js' %}")
+        .then(() => console.log("Service Worker enregistré"))
+        .catch(err => console.error("Erreur SW:", err));
+    }
+  </script>
+
+  <!-- Form helpers and micro-interactions (do not change field names) -->
+  <script>
+    // --- Basic state
+    let compteur = 2;
+    let isSaving = false; // bloque actions pendant enregistrement
+
+    // Util: normalize phone (strip spaces, +, -, parenthesis)
+    function normalizePhone(v){
+      return v.replace(/[^\d]/g, '');
+    }
+
+    // Util: get all current phone values normalized
+    function getAllPhones(){
+      const inputs = document.querySelectorAll('#numeros input[name^="numero_"]');
+      return Array.from(inputs).map(i => normalizePhone(i.value)).filter(Boolean);
+    }
+
+    // Ajoute un input numero déjà stylé (avec icone et aria)
+    function createPhoneInput(index){
+      const wrapper = document.createElement('div');
+      wrapper.className = 'input-icon-left';
+      wrapper.style.marginTop = '8px';
+      wrapper.innerHTML = `
+        <i class="fas fa-phone input-icon" aria-hidden="true"></i>
+        <input class="form-control" type="tel" name="numero_${index}" id="numero_${index}" pattern="[0-9]{10}" inputmode="numeric" aria-label="Numéro ${index}" placeholder="Numéro ${index} (Ex: 033123456${index})" />
+      `;
+      // Attach validation icon behaviour
+      const input = wrapper.querySelector('input');
+      attachValidationIcon(input);
+      return wrapper;
+    }
+
+    // Prevent duplicates client-side
+    function isDuplicatePhone(candidate){
+      const norm = normalizePhone(candidate || '');
+      if(!norm) return false;
+      const existing = getAllPhones();
+      return existing.includes(norm);
+    }
+
+    // Add phone
+    function ajouterNumero(){
+      if(isSaving) return; // blocked while saving
+      const addBtn = document.getElementById('addNumberBtn');
+      // temporary disable to avoid multiple clicks
+      addBtn.disabled = true;
+      setTimeout(()=> addBtn.disabled = false, 300);
+
+      // create input but check duplicates only once user types; also avoid creating identical placeholders repeatedly
+      const newIndex = compteur;
+      const newWrapper = createPhoneInput(newIndex);
+      document.getElementById('numeros').appendChild(newWrapper);
+      // animate
+      newWrapper.animate([{ transform: 'scale(.98)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 200, easing: 'cubic-bezier(.2,.9,.3,1)' });
+      // focus the new input
+      newWrapper.querySelector('input').focus();
+      compteur++;
+      showToast('Numéro ajouté', true);
+    }
+
+    // Remove last phone
+    function collapseLastNumber(){
+      if(isSaving) return;
+      const container = document.getElementById('numeros');
+      const inputs = container.querySelectorAll('input[name^="numero_"]');
+      if (inputs.length > 1) {
+        const last = inputs[inputs.length - 1];
+        last.closest('.input-icon-left').animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(.97)' }], { duration: 160 }).onfinish = () => {
+          last.closest('.input-icon-left').remove();
+        };
+        compteur = Math.max(2, compteur - 1);
+        showToast('Numéro supprimé', false);
+      } else {
+        showToast('Au moins un numéro requis', false);
+        // mark the single input invalid so user sees requiredness
+        const only = inputs[0];
+        if(only) markFieldInvalid(only, 'Au moins un numéro requis');
+      }
+    }
+
+    // Toast (unchanged)
+    function showToast(text, ok=true){
+      const t = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      txt.textContent = text;
+      t.classList.add('show');
+      t.style.background = ok ? 'linear-gradient(90deg,var(--c1),var(--c2))' : 'linear-gradient(90deg,#ff6b6b,#ff3d5a)';
+      clearTimeout(t._hide);
+      t._hide = setTimeout(()=> t.classList.remove('show'), 2800);
+    }
+
+    // Mark field invalid with message
+    function markFieldInvalid(el, message){
+      el.classList.add('invalid');
+      el.setAttribute('aria-invalid', 'true');
+      const name = el.name || el.id;
+      const box = document.querySelector(`.field-error[data-for="${name.replace(/^numero_\\d+$/,'numero')}"]`) ||
+                  document.querySelector(`.field-error[data-for="${el.id}"]`) ||
+                  document.querySelector(`.field-error[data-for="${el.name}"]`);
+      if(box){
+        box.textContent = message;
+        box.classList.remove('hidden');
+      }
+    }
+
+    function clearFieldError(el){
+      el.classList.remove('invalid');
+      el.removeAttribute('aria-invalid');
+      const name = el.name || el.id;
+      const box = document.querySelector(`.field-error[data-for="${name.replace(/^numero_\\d+$/,'numero')}"]`) ||
+                  document.querySelector(`.field-error[data-for="${el.id}"]`) ||
+                  document.querySelector(`.field-error[data-for="${el.name}"]`);
+      if(box){
+        box.textContent = '';
+        box.classList.add('hidden');
+      }
+    }
+
+    // attach icon color feedback (existing behaviour) and clear invalid when input changes
+    function attachValidationIcon(input){
+      input.addEventListener('input', () => {
+        const val = input.value.trim();
+        const iconel = input.closest('.form-group')?.querySelector('.fa') || input.closest('.input-icon-left')?.querySelector('.input-icon');
+        if(!iconel) return;
+        // set icon color based on validity
+        if(input.checkValidity()) iconel.style.color = 'var(--c3)';
+        else iconel.style.color = 'var(--c1)';
+        // clear inline error when user types
+        if(input.checkValidity()) clearFieldError(input);
+      });
+    }
+
+    // initialize attachValidationIcon on initial controls including the phone input
+    document.querySelectorAll('.form-control').forEach(attachValidationIcon);
+
+    // form submit handling: validate required fields, prevent duplicate phones, disable UI while saving
+    document.getElementById('ajoutForm')?.addEventListener('submit', function(e){
+      // client validations
+      e.preventDefault();
+
+      if(isSaving) return;
+
+      let formValid = true;
+
+      // clear all previous errors
+      document.querySelectorAll('.field-error').forEach(b => { b.textContent=''; b.classList.add('hidden'); });
+      document.querySelectorAll('.form-control').forEach(i => { i.classList.remove('invalid'); i.removeAttribute('aria-invalid'); });
+
+      // required fields list
+      const requiredIds = ['nom','prenom','date_naissance','pays','region','district','commune','village','adresse'];
+      requiredIds.forEach(id => {
+        const el = document.getElementById(id);
+        if(el && !el.value.trim()){
+          markFieldInvalid(el, 'Champ obligatoire');
+          formValid = false;
+        }
+      });
+
+      // validate phone inputs: no empty, pattern, no duplicates
+      const phoneInputs = document.querySelectorAll('#numeros input[name^="numero_"]');
+      const seen = new Set();
+      if(phoneInputs.length === 0) {
+        // should not happen, but guard
+        const box = document.querySelector('.field-error[data-for="numero"]');
+        if(box){ box.textContent = 'Au moins un numéro requis'; box.classList.remove('hidden'); }
+        formValid = false;
+      } else {
+        phoneInputs.forEach((inp) => {
+          const raw = inp.value.trim();
+          const norm = normalizePhone(raw);
+          if(!raw || !inp.checkValidity() || norm.length < 7){
+            markFieldInvalid(inp, 'Numéro invalide ou vide');
+            formValid = false;
+          } else {
+            if(seen.has(norm)){
+              markFieldInvalid(inp, 'Numéro dupliqué');
+              formValid = false;
+            } else {
+              seen.add(norm);
+            }
+          }
+        });
+      }
+
+      if(!formValid){
+        // focus first invalid field
+        const firstInvalid = document.querySelector('.form-control.invalid');
+        if(firstInvalid) firstInvalid.focus();
+        showToast('Corrigez les champs en erreur', false);
+        return;
+      }
+
+      // If passed validation: disable UI, show loader, prevent double submissions
+      isSaving = true;
+      const loader = document.getElementById('page-loader');
+      const saveBtn = document.getElementById('saveBtn');
+      const addBtn = document.getElementById('addNumberBtn');
+      const rmBtn = document.getElementById('rmNumberBtn');
+      // visual locking
+      if(loader) loader.style.display = 'flex';
+      if(saveBtn){ saveBtn.disabled = true; saveBtn.classList.add('loading'); }
+      if(addBtn) addBtn.disabled = true;
+      if(rmBtn) rmBtn.disabled = true;
+      // also dim the form to hint blocking (non-invasive)
+      document.getElementById('ajoutForm').classList.add('muted-while-saving');
+
+      // Submit the form normally after UI lock (so Django receives POST)
+      // Use a small timeout to allow UI to update (optional)
+      setTimeout(()=> {
+        // remove any client-side duplicate phone hidden inputs etc. (we keep logic simple)
+        e.target.submit();
+      }, 80);
+    });
+
+    // When page reloads after server response, server should redirect or re-render.
+    // To re-enable UI if submission failed and page didn't navigate, try to detect and re-enable:
+    window.addEventListener('load', () => {
+      // If page-loader still visible (maybe server returned error page), re-enable
+      const loader = document.getElementById('page-loader');
+      if(loader && loader.style.display === 'flex') {
+        // small delay to simulate end of save if server returned page without redirect
+        setTimeout(()=> {
+          loader.style.display = 'none';
+          isSaving = false;
+          const saveBtn = document.getElementById('saveBtn');
+          const addBtn = document.getElementById('addNumberBtn');
+          const rmBtn = document.getElementById('rmNumberBtn');
+          if(saveBtn){ saveBtn.disabled = false; saveBtn.classList.remove('loading'); }
+          if(addBtn) addBtn.disabled = false;
+          if(rmBtn) rmBtn.disabled = false;
+          document.getElementById('ajoutForm').classList.remove('muted-while-saving');
+        }, 600);
+      }
+    });
+
+    // Optional: Prevent accidental double-click on add too quickly via a simple throttle exposed to global
+    (function(){
+      const orig = window.ajouterNumero;
+      // already defined below; this is safe fallback
+    })();
+  </script>
+
+</body>
+</html>

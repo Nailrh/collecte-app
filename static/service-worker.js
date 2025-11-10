@@ -3,20 +3,34 @@ const CACHE_NAME = 'collecte-shell-v3';
 const RUNTIME = 'collecte-runtime-v1';
 
 const PRECACHE_URLS = [
-  '/', // root (assure-toi que ton server sert bien l'index HTML à /)
+  '/',
   '/static/css/styles.css',
   '/static/css/styled.css',
   '/static/js/indexeddb.js',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
-  '/manifest.json'
+  '/static/manifest.json'
 ];
+
+async function safePrecache(urls) {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.all(urls.map(async url => {
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (res && res.ok) await cache.put(url, res.clone());
+      else console.warn('Precache skipped (not ok):', url, res && res.status);
+    } catch (e) {
+      console.warn('Precache failed for', url, e);
+    }
+  }));
+}
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+    (async () => {
+      await safePrecache(PRECACHE_URLS);
+      await self.skipWaiting();
+    })()
   );
 });
 
@@ -34,12 +48,15 @@ self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Network-first for API endpoints (to keep sync fresh)
+  // Network-first for API endpoints
   if (url.pathname.startsWith('/api/') || url.pathname.includes('/api/')) {
     event.respondWith(
       fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(RUNTIME).then(cache => cache.put(req, copy));
+        // Only cache successful responses
+        if (res && res.status === 200) {
+          const copy = res.clone();
+          caches.open(RUNTIME).then(cache => cache.put(req, copy));
+        }
         return res;
       }).catch(() => caches.match(req).then(cached => cached || new Response('', { status: 503 })))
     );
@@ -58,7 +75,7 @@ self.addEventListener('fetch', event => {
   if (req.destination === 'style' || req.destination === 'script' || req.destination === 'image' || req.destination === 'font') {
     event.respondWith(
       caches.match(req).then(cached => cached || fetch(req).then(resp => {
-        caches.open(RUNTIME).then(cache => cache.put(req, resp.clone()));
+        if (resp && resp.ok) caches.open(RUNTIME).then(cache => cache.put(req, resp.clone()));
         return resp;
       }).catch(() => cached || new Response('', { status: 503 })))
     );
@@ -75,6 +92,6 @@ self.addEventListener('message', event => {
   if (!event.data) return;
   if (event.data.type === 'SKIP_WAITING') return self.skipWaiting();
   if (event.data.type === 'SYNC_OUTBOX') {
-    // client can request a manual attempt to sync outbox (implementation app-side)
+    // placeholder: client calls postMessage({type:'SYNC_OUTBOX'}) to trigger manual sync
   }
 });

@@ -20,21 +20,36 @@
 <body>
   {% block content %}{% endblock %}
 
-  <!-- Toast / feedback container (for toasts from JS) -->
   <div id="toast" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1200;display:none"></div>
 
-  <!-- Scripts -->
+  <!-- Scripts: indexeddb must be available before app code -->
   <script src="{% static 'js/indexeddb.js' %}"></script>
+
   <script>
-    // registration service worker (attempt only if supported)
+    // Robust service worker registration and lifecycle handling
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('{% static "service-worker.js" %}')
-          .then(reg => {
-            // ask waiting SW to activate immediately if updating
-            if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          })
-          .catch(err => console.warn('SW registration failed:', err));
+      window.addEventListener('load', async () => {
+        try {
+          const reg = await navigator.serviceWorker.register("{% static 'service-worker.js' %}", { scope: '/' });
+          console.log('SW registered', reg);
+
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('Service worker controller changed — reloading to activate new SW');
+            window.location.reload();
+          });
+
+          await navigator.serviceWorker.ready;
+          if (window.DB && typeof window.DB.ready === 'function') {
+            await window.DB.ready();
+          }
+          console.log('SW ready and DB opened');
+        } catch (err) {
+          console.warn('SW registration failed:', err);
+        }
       });
     }
   </script>

@@ -1,0 +1,31 @@
+# Environnement virtuel
+env/
+.venv/
+
+# Fichiers Python compilés
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Base de données locale
+db.sqlite3
+
+# Fichiers statiques collectés
+staticfiles/
+
+# Fichiers temporaires
+*.log
+*.pot
+*.pyc
+*.swp
+*.swo
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Secrets (si jamais tu en ajoutes)
+.env

@@ -4,9 +4,21 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-r6ed8wmd3vi=9t8s%v3)-mtp&tj)b-%_@2m930elh(@be-m_04')
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
+
+
+# SECRET KEY — préférer la variable d'environnement en production
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "de831da0104cbe7cad72f5cbba5b7c3c")
+
+# DEBUG — lire depuis l'environnement (False en production)
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() in ("1", "true", "yes")
+
+# ALLOWED_HOSTS — ajoute ton domaine Render et localhost pour dev local
+# Remplace <ton-app-onrender-com> par l'URL fournie par Render (sans https://)
+_allowed = os.environ.get("DJANGO_ALLOWED_HOSTS", "https://collecte-mobile.onrender.com,localhost,127.0.0.1")
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
+
+# Si Render fournit un proxy HTTPS (habituel), ajoute l'entête proxy SSL
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Applications
 INSTALLED_APPS = [
@@ -84,4 +96,5 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

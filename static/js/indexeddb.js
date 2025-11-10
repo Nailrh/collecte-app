@@ -4,10 +4,14 @@
 */
 const DB = (function () {
   const DB_NAME = 'collecte_db';
-  const DB_VER = 1; // incrémente si tu changes la structure (ex: 2)
+  const DB_VER = 1;
   const STORE_PERSONNES = 'personnes';
   const STORE_OUTBOX = 'outbox';
   let db = null;
+  let _readyPromise = null;
+
+  // Configurable sync endpoint (adapt to your backend)
+  const SYNC_URL = '/api/sync-outbox/';
 
   function log(...args) { console.log('[DB]', ...args); }
   function errLog(...args) { console.error('[DB]', ...args); }
@@ -20,13 +24,11 @@ const DB = (function () {
       req.onupgradeneeded = e => {
         const d = e.target.result;
         log('onupgradeneeded, oldVersion=', e.oldVersion, 'newVersion=', e.newVersion);
-        // personnes store : keyPath 'id' avec autoIncrement
         if (!d.objectStoreNames.contains(STORE_PERSONNES)) {
           const s = d.createObjectStore(STORE_PERSONNES, { keyPath: 'id', autoIncrement: true });
           s.createIndex('created_at', 'created_at', { unique: false });
           log('created store', STORE_PERSONNES);
         }
-        // outbox store : autoIncrement qid
         if (!d.objectStoreNames.contains(STORE_OUTBOX)) {
           d.createObjectStore(STORE_OUTBOX, { keyPath: 'qid', autoIncrement: true });
           log('created store', STORE_OUTBOX);
@@ -55,6 +57,21 @@ const DB = (function () {
     });
   }
 
+  // ready() returns a single promise to open the DB
+  function ready() {
+    if (!_readyPromise) _readyPromise = open();
+    return _readyPromise;
+  }
+
+  // transaction completion helper (portable)
+  function waitTxComplete(tx) {
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onabort = e => reject(e.target && e.target.error);
+      tx.onerror = e => reject(e.target && e.target.error);
+    });
+  }
+
   // helper to get objectStore via transaction, returns {store, tx}
   async function getStore(storeName, mode = 'readonly') {
     const database = await open();
@@ -76,11 +93,15 @@ const DB = (function () {
       const { store, tx } = await getStore(STORE_PERSONNES, 'readwrite');
       const req = store.add(person);
       const result = await promisifyRequest(req);
-      await promisifyRequest(tx.complete || tx); // ensure transaction completion
+      await waitTxComplete(tx);
       log('addPerson success', result, person);
       return result;
     } catch (e) {
-      errLog('addPerson error', e);
+      if (e && e.name === 'QuotaExceededError') {
+        errLog('addPerson QuotaExceededError');
+      } else {
+        errLog('addPerson error', e);
+      }
       throw e;
     }
   }
@@ -90,7 +111,7 @@ const DB = (function () {
       const { store, tx } = await getStore(STORE_PERSONNES, 'readwrite');
       const req = store.put(person);
       const result = await promisifyRequest(req);
-      await promisifyRequest(tx.complete || tx);
+      await waitTxComplete(tx);
       log('upsertPerson success', result, person);
       return result;
     } catch (e) {
@@ -143,7 +164,7 @@ const DB = (function () {
       const { store, tx } = await getStore(STORE_PERSONNES, 'readwrite');
       const req = store.delete(id);
       const result = await promisifyRequest(req);
-      await promisifyRequest(tx.complete || tx);
+      await waitTxComplete(tx);
       log('deletePerson', id);
       return result;
     } catch (e) {
@@ -157,7 +178,7 @@ const DB = (function () {
       const { store, tx } = await getStore(STORE_PERSONNES, 'readwrite');
       const req = store.clear();
       const result = await promisifyRequest(req);
-      await promisifyRequest(tx.complete || tx);
+      await waitTxComplete(tx);
       log('clearPersons done');
       return result;
     } catch (e) {
@@ -182,7 +203,7 @@ const DB = (function () {
             }
             cursor.continue();
           } else {
-            // cursor done
+            // done
           }
         };
         req.onerror = e => reject(e.target.error);
@@ -200,7 +221,6 @@ const DB = (function () {
     try {
       const { store, tx } = await getStore(STORE_PERSONNES, 'readwrite');
       return await new Promise((resolve, reject) => {
-        let added = 0;
         items.forEach(item => store.add(item));
         tx.oncomplete = () => {
           log('bulkAddPersons complete', items.length);
@@ -223,7 +243,7 @@ const DB = (function () {
       const { store, tx } = await getStore(STORE_OUTBOX, 'readwrite');
       const req = store.add({ action, ts: Date.now() });
       const result = await promisifyRequest(req);
-      await promisifyRequest(tx.complete || tx);
+      await waitTxComplete(tx);
       log('enqueueSync qid=', result);
       return result;
     } catch (e) {
@@ -250,11 +270,44 @@ const DB = (function () {
       const { store, tx } = await getStore(STORE_OUTBOX, 'readwrite');
       const req = store.delete(qid);
       const result = await promisifyRequest(req);
-      await promisifyRequest(tx.complete || tx);
+      await waitTxComplete(tx);
       log('removeOutboxItem', qid);
       return result;
     } catch (e) {
       errLog('removeOutboxItem error', e);
+      throw e;
+    }
+  }
+
+  // flush outbox: attempts to POST items one by one; stops on network error
+  async function flushOutbox({ syncUrl = SYNC_URL, onProgress = null } = {}) {
+    try {
+      const out = await getOutbox();
+      for (const item of out) {
+        try {
+          const resp = await fetch(syncUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.action),
+            credentials: 'same-origin'
+          });
+          if (!resp.ok) {
+            // If server error or unauthorized, stop and surface
+            errLog('flushOutbox: server returned', resp.status);
+            return { success: false, status: resp.status };
+          }
+          // remove item on success
+          await removeOutboxItem(item.qid);
+          if (onProgress) onProgress(item.qid);
+        } catch (e) {
+          // network error — stop and retry later
+          errLog('flushOutbox network error', e);
+          return { success: false, error: e };
+        }
+      }
+      return { success: true };
+    } catch (e) {
+      errLog('flushOutbox fatal', e);
       throw e;
     }
   }
@@ -270,7 +323,7 @@ const DB = (function () {
   // for testing convenience
   async function testAddAndList() {
     try {
-      await open();
+      await ready();
       const id = await addPerson({ name: 'Test ' + Date.now(), created_at: Date.now() });
       const all = await getAllPersons();
       log('testAddAndList ->', all);
@@ -282,6 +335,7 @@ const DB = (function () {
   }
 
   return {
+    ready,
     open,
     addPerson,
     upsertPerson,
@@ -295,6 +349,7 @@ const DB = (function () {
     enqueueSync,
     getOutbox,
     removeOutboxItem,
+    flushOutbox,
     close,
     testAddAndList
   };

@@ -28,37 +28,32 @@
 
     /* ------------------------------------------------------------------
        ICON LAYOUT FOR FORM FIELDS (non-numéros)
-       - Respecte ta structure HTML : les <i class="input-icon ..."> existent
-       - Contrôle placement, taille et espacement sans toucher aux inputs
-       - Ajuste les variables ci-dessous pour personnaliser l'apparence
+       - Respecte ta structure HTML : the <i class="input-icon ..."> exist
+       - Controls placement, size and spacing without touching inputs
        ------------------------------------------------------------------ */
 
-    /* variables (override dans styled.css si besoin) */
     :root {
-      --field-icon-size: 1.05rem;    /* taille de l'icône */
-      --field-icon-gap: 10px;        /* espace entre icône et label/input */
+      --field-icon-size: 1.05rem;
+      --field-icon-gap: 10px;
       --field-icon-color: var(--c1,#007bff);
       --field-icon-bg: transparent;
     }
 
-    /* wrapper for each form group (kept minimal to avoid interfering with existing rules) */
     .form-group {
       margin-bottom:12px;
       position:relative;
     }
 
-    /* We detect groups that have an icon on the left via input-icon-left class (your template uses it) */
     .form-group.input-icon-left {
       display:flex;
       flex-direction:column;
       gap:6px;
     }
 
-    /* Icon element styling (you already use <i class="input-icon ...">) */
     .form-group .input-icon {
-      position:absolute;                 /* visually positioned relative to the group */
-      left:500px;                         /* horizontal position of icon */
-      top:10%;                           /* vertical centering */
+      position:absolute;
+      left:500px;
+      top:10%;
       transform:translateY(-50%);
       width: calc(var(--field-icon-size) * 1.5);
       height: calc(var(--field-icon-size) * 1.5);
@@ -67,22 +62,24 @@
       font-size: var(--field-icon-size);
       color: var(--field-icon-color);
       background: var(--field-icon-bg);
-      pointer-events: none;              /* icon purely decorative */
+      pointer-events: none;
       opacity:0.95;
     }
 
-    /* When the input sits next to an absolutely-positioned icon, add left padding to inputs */
-    /* We only apply to non-tel inputs (you said numbers are handled) */
+    .form-group .input-icon[aria-hidden="true"] { speak: none; }
+
+    .form-group .input-icon { /* ensure icons don't push content on small screens */
+      left:8px;
+    }
+
     .form-group.input-icon-left input[type="text"],
     .form-group.input-icon-left input[type="email"],
     .form-group.input-icon-left input[type="date"],
     .form-group.input-icon-left textarea,
     .form-group.input-icon-left .form-control:not([type="tel"]) {
-      padding-left:44px;                 /* leave space for icon; tweak if needed */
+      padding-left:44px;
     }
 
-    /* If you want icons on the right for specific fields, you can add input-icon-right class to the group
-       (not applied automatically here; comment explains how to use) */
     .form-group.input-icon-right .input-icon {
       left: auto;
       right: 10px;
@@ -93,7 +90,6 @@
       padding-right:44px;
     }
 
-    /* Smaller screens adjustments */
     @media (max-width:480px) {
       :root { --field-icon-size: 0.95rem; }
       .form-group .input-icon { left:8px; }
@@ -103,9 +99,6 @@
         padding-left:40px;
       }
     }
-
-    /* Accessibility: hide decorative icons from assistive tech explicitly */
-    .input-icon[aria-hidden="true"] { speak: none; }
   </style>
 </head>
 <body>
@@ -138,7 +131,7 @@
         <div class="form-group input-arrow-right">
           {# Choose an icon by field name (adapt these names to your form field names) #}
           {% if field.name == 'nom' %}
-            <!-- ICON: Nom — ajuster position/size via .input-icon and CSS en haut du fichier -->
+            <!-- ICON: Nom -->
             <i class="" aria-hidden="true"></i>
           {% elif field.name == 'prenom' %}
             <!-- ICON: Prenom -->

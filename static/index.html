@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Collecte Mobile</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#007bff">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- server-rendered app or JS mount point -->
+    <h1>Collecte Mobile</h1>
+  </div>
+
+  <script src="/static/js/indexeddb.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(reg => console.log('SW registered', reg))
+        .catch(err => console.error('SW failed', err));
+    }
+    // Optional: notify new SW to skip waiting
+    navigator.serviceWorker && navigator.serviceWorker.addEventListener && navigator.serviceWorker.addEventListener('controllerchange', () => {
+      console.log('Service worker controller changed');
+    });
+  </script>
+</body>
+</html>

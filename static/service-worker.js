@@ -1,32 +1,36 @@
-/* static/service-worker.js
-   Robust service worker for Collecte Mobile
-   - Precaches a minimal shell and icons
-   - Runtime caching for static assets (CSS/JS/images/fonts)
-   - Network-first for API with cache fallback
-   - Offline navigation fallback to /static/offline.html
-   - Safe precache (no credentials) and graceful error logging
-*/
+// static/service-worker.js
+// Robust service worker for Collecte Mobile
+// - Precaches shell and offline page (fetch credentials: 'omit')
+// - Runtime caching for assets
+// - Network-first for API with cache fallback
+// - Navigation: network-first, fallback to cached shell, then offline.html
+// - Exposes messages SKIP_WAITING and SYNC_OUTBOX_REQUEST
 
 const CACHE_NAME = 'collecte-shell-v3';
 const RUNTIME = 'collecte-runtime-v1';
-const MAX_RUNTIME_ENTRIES = 100; // trim runtime cache to avoid unbounded growth
+const MAX_RUNTIME_ENTRIES = 100;
 
 const PRECACHE_URLS = [
-  '/',                       // ensure your root returns the app shell
-  '/static/offline.html',    // offline fallback page (create this)
+  '/',                      // app shell entry (ensure server serves index.html at '/')
+  '/index.html',            // explicit index if your server uses it
+  '/static/offline.html',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
 ];
 
 async function safePrecache(urls) {
   const cache = await caches.open(CACHE_NAME);
-  await Promise.all(urls.map(async url => {
+  await Promise.all(urls.map(async (url) => {
     try {
-      const res = await fetch(url);
-      if (res && res.ok) await cache.put(url, res.clone());
-      else console.warn('Precache skipped (not ok):', url, res && res.status);
-    } catch (e) {
-      console.warn('Precache failed for', url, e);
+      const res = await fetch(url, { credentials: 'omit', cache: 'no-cache' });
+      if (res && res.ok) {
+        await cache.put(url, res.clone());
+        console.log('[SW] precached:', url);
+      } else {
+        console.warn('[SW] precache skipped (not ok):', url, res && res.status);
+      }
+    } catch (err) {
+      console.warn('[SW] precache failed for', url, err);
     }
   }));
 }
@@ -41,22 +45,23 @@ async function trimCache(cacheName, maxItems) {
       await cache.delete(keys[i]);
     }
   } catch (e) {
-    console.warn('trimCache error', e);
+    console.warn('[SW] trimCache error', e);
   }
 }
 
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     await safePrecache(PRECACHE_URLS);
     await self.skipWaiting();
   })());
 });
 
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map(key => {
       if (key !== CACHE_NAME && key !== RUNTIME) return caches.delete(key);
+      return Promise.resolve();
     }));
     await self.clients.claim();
   })());
@@ -66,7 +71,7 @@ function isApiRequest(url) {
   return url.pathname.startsWith('/api/') || url.pathname.includes('/api/');
 }
 
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
@@ -94,16 +99,22 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Navigation requests -> serve shell from cache, fallback to network, then offline page
+  // Navigation requests -> network-first, fallback to cached shell, then offline page
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
-      const cachedShell = await caches.match('/');
-      if (cachedShell) return cachedShell;
       try {
-        return await fetch(req);
+        // Try network first to get latest app shell or route HTML
+        const networkResponse = await fetch(req);
+        return networkResponse;
       } catch (e) {
+        // If network fails, try cached shell variants, then offline.html
+        const cachedRoot = await caches.match('/');
+        if (cachedRoot) return cachedRoot;
+        const cachedIndex = await caches.match('/index.html');
+        if (cachedIndex) return cachedIndex;
         const offline = await caches.match('/static/offline.html');
-        return offline || new Response('Offline', { status: 503, statusText: 'Offline' });
+        if (offline) return offline;
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
       }
     })());
     return;
@@ -123,6 +134,7 @@ self.addEventListener('fetch', event => {
         }
         return res;
       } catch (e) {
+        // If asset fails, optionally return offline.html for images/fonts or empty response
         const fallback = await caches.match('/static/offline.html');
         return fallback || new Response('', { status: 503 });
       }
@@ -140,15 +152,14 @@ self.addEventListener('fetch', event => {
   })());
 });
 
-self.addEventListener('message', event => {
+// Message handler (skip waiting and outbox sync trigger)
+self.addEventListener('message', (event) => {
   if (!event.data) return;
   if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
     return;
   }
   if (event.data.type === 'SYNC_OUTBOX') {
-    // Client requests SW to trigger an outbox sync flow.
-    // SW can postMessage clients back to confirm; actual network sync is handled in the page.
     (async () => {
       const clients = await self.clients.matchAll({ includeUncontrolled: true });
       for (const client of clients) {

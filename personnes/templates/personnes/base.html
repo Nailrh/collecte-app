@@ -68,6 +68,53 @@
     }
   </script>
 
+  <!-- SPA navigation handling -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Intercepte les clics sur les liens internes
+      document.body.addEventListener('click', async (e) => {
+        const link = e.target.closest('a');
+        if (link && link.href.startsWith(window.location.origin)) {
+          e.preventDefault();
+          const url = link.getAttribute('href');
+          try {
+            const res = await fetch(url);
+            if (res.ok) {
+              const html = await res.text();
+              // Remplace le contenu principal
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, 'text/html');
+              const newContent = doc.querySelector('body').innerHTML;
+              document.body.innerHTML = newContent;
+              history.pushState({}, '', url);
+            } else {
+              console.warn('Navigation failed:', res.status);
+            }
+          } catch (err) {
+            console.warn('Offline navigation fallback:', err);
+            alert('Vous êtes hors ligne — contenu non disponible.');
+          }
+        }
+      });
+
+      // Gère le bouton retour/avant du navigateur
+      window.addEventListener('popstate', async () => {
+        const url = window.location.pathname;
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            const html = await res.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            document.body.innerHTML = doc.querySelector('body').innerHTML;
+          }
+        } catch (err) {
+          console.warn('Offline navigation fallback:', err);
+        }
+      });
+    });
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

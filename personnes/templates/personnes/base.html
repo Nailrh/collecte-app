@@ -34,7 +34,11 @@
           console.log('SW registered', reg);
 
           if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            try {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            } catch (e) {
+              console.warn('Could not postMessage to waiting worker', e);
+            }
           }
 
           navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -43,9 +47,19 @@
           });
 
           await navigator.serviceWorker.ready;
-          if (window.DB && typeof window.DB.ready === 'function') {
-            await window.DB.ready();
+
+          if (!window.DB) {
+            console.warn('window.DB not available — check indexeddb.js exposure');
           }
+
+          if (window.DB && typeof window.DB.ready === 'function') {
+            try {
+              await window.DB.ready();
+            } catch (e) {
+              console.warn('DB.ready failed', e);
+            }
+          }
+
           console.log('SW ready and DB opened');
         } catch (err) {
           console.warn('SW registration failed:', err);

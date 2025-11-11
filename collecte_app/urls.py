@@ -16,8 +16,18 @@ Including another URLconf
 """
 # personnes/urls.py
 from django.urls import path
-from personnes import views
+from django.views import View
+from django.http import FileResponse, Http404
+import os
+from django.conf import settings
 
+class ServiceWorkerView(View):
+    def get(self, request, *args, **kwargs):
+        path = os.path.join(settings.BASE_DIR, 'static', 'service-worker.js')
+        if not os.path.exists(path):
+            raise Http404("service-worker.js not found")
+        return FileResponse(open(path, 'rb'), content_type='application/javascript')
+        
 urlpatterns = [
     path('', views.home, name='home'),
     path('liste/', views.liste_personnes, name='liste_personnes'),
@@ -25,6 +35,7 @@ urlpatterns = [
     path('personne/<int:pk>/', views.detail_personne, name='detail_personne'),
     path('modifier/<int:pk>/', views.modifier_personne, name='modifier_personne'),
     path('supprimer/<int:pk>/', views.supprimer_personne, name='supprimer_personne'),
-    
+    path('service-worker.js', ServiceWorkerView.as_view(), name='service-worker'),
 ] 
+
 

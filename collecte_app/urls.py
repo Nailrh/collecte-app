@@ -1,7 +1,7 @@
 """
 URL configuration for collecte_app project.
 
-The `urlpatterns` list routes URLs to views. For more information please see:
+The urlpatterns list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.2/topics/http/urls/
 Examples:
 Function views
@@ -14,7 +14,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-# personnes/urls.py
+
+from django.views.generic import TemplateView
 from django.urls import path
 from personnes import views
 
@@ -25,6 +26,10 @@ urlpatterns = [
     path('personne/<int:pk>/', views.detail_personne, name='detail_personne'),
     path('modifier/<int:pk>/', views.modifier_personne, name='modifier_personne'),
     path('supprimer/<int:pk>/', views.supprimer_personne, name='supprimer_personne'),
-    
-] 
 
+    # Serve the service worker from the project root
+    path('service-worker.js', TemplateView.as_view(
+        template_name="service-worker.js",
+        content_type='application/javascript'
+    )),
+]

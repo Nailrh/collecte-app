@@ -1,8 +1,10 @@
 /* static/js/indexeddb.js
    Robust IndexedDB wrapper for collecte-app.
    DB name: collecte_db (stores: personnes, outbox)
+   Exposes window.DB
 */
-const DB = (function () {
+
+(function (window) {
   const DB_NAME = 'collecte_db';
   const DB_VER = 1;
   const STORE_PERSONNES = 'personnes';
@@ -74,7 +76,7 @@ const DB = (function () {
 
   // helper to get objectStore via transaction, returns {store, tx}
   async function getStore(storeName, mode = 'readonly') {
-    const database = await open();
+    const database = await ready();
     const tx = database.transaction(storeName, mode);
     const store = tx.objectStore(storeName);
     return { store, tx };
@@ -83,7 +85,7 @@ const DB = (function () {
   function promisifyRequest(req) {
     return new Promise((resolve, reject) => {
       req.onsuccess = () => resolve(req.result);
-      req.onerror = e => reject(e.target.error);
+      req.onerror = e => reject(e.target && e.target.error);
     });
   }
 
@@ -190,7 +192,9 @@ const DB = (function () {
   // iterate with cursor
   async function iteratePersons(cb /* function(item) */) {
     try {
-      const { store, tx } = await getStore(STORE_PERSONNES, 'readonly');
+      const database = await ready();
+      const tx = database.transaction(STORE_PERSONNES, 'readonly');
+      const store = tx.objectStore(STORE_PERSONNES);
       return await new Promise((resolve, reject) => {
         const req = store.openCursor();
         req.onsuccess = e => {
@@ -239,12 +243,13 @@ const DB = (function () {
 
   // Outbox helpers
   async function enqueueSync(action) {
+    // recommended action shape: { method: 'POST', url: '/api/personnes/', body: {...} }
     try {
       const { store, tx } = await getStore(STORE_OUTBOX, 'readwrite');
       const req = store.add({ action, ts: Date.now() });
       const result = await promisifyRequest(req);
       await waitTxComplete(tx);
-      log('enqueueSync qid=', result);
+      log('enqueueSync qid=', result, action);
       return result;
     } catch (e) {
       errLog('enqueueSync error', e);
@@ -279,29 +284,115 @@ const DB = (function () {
     }
   }
 
-  // flush outbox: attempts to POST items one by one; stops on network error
-  async function flushOutbox({ syncUrl = SYNC_URL, onProgress = null } = {}) {
+  // Utility: get CSRF token from cookie (Django default)
+  function getCSRF() {
+    const m = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+
+  // Utility: fetch with timeout and optional retries
+  function fetchWithTimeout(url, opts = {}, ms = 15000, signal) {
+    const controller = new AbortController();
+    const signals = [controller.signal];
+    if (signal) {
+      signal.addEventListener('abort', () => controller.abort());
+    }
+    const id = setTimeout(() => controller.abort(), ms);
+    const mergedOpts = Object.assign({}, opts, { signal: controller.signal });
+    return fetch(url, mergedOpts).finally(() => clearTimeout(id));
+  }
+
+  async function tryFetchWithRetries(url, opts = {}, retries = 2, backoff = 1000) {
+    let lastErr = null;
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const res = await fetchWithTimeout(url, opts, 15000);
+        return res;
+      } catch (e) {
+        lastErr = e;
+        await new Promise(r => setTimeout(r, backoff * (i + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
+  // flush outbox: expects action shape { method, url, body }
+  async function flushOutbox({ syncUrl = SYNC_URL, onProgress = null, retries = 1 } = {}) {
     try {
       const out = await getOutbox();
       for (const item of out) {
+        const action = item.action || {};
+        const method = (action.method || 'POST').toUpperCase();
+        const url = action.url || syncUrl;
+        const body = action.body || action; // fallback to whole action if shape different
+
+        const headers = { 'Content-Type': 'application/json' };
+        const csrftoken = getCSRF();
+        if (csrftoken) headers['X-CSRFToken'] = csrftoken;
+
         try {
-          const resp = await fetch(syncUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(item.action),
+          const resp = await tryFetchWithRetries(url, {
+            method,
+            headers,
+            body: method === 'GET' ? undefined : JSON.stringify(body),
             credentials: 'same-origin'
-          });
-          if (!resp.ok) {
-            // If server error or unauthorized, stop and surface
-            errLog('flushOutbox: server returned', resp.status);
-            return { success: false, status: resp.status };
+          }, retries, 1000);
+
+          if (!resp || !resp.ok) {
+            // server returned error - surface it and stop processing further items
+            errLog('flushOutbox: server returned', resp && resp.status);
+            return { success: false, status: resp && resp.status };
           }
-          // remove item on success
-          await removeOutboxItem(item.qid);
+
+          // parse response and allow server to map client -> server ids if provided
+          let data = null;
+          try {
+            data = await resp.json().catch(() => null);
+          } catch (e) {
+            data = null;
+          }
+
+          // if server returns mapping, let client update local records
+          if (data && data.mappings) {
+            // example mappings: [{ client_qid: item.qid, server_id: 123, client_id: 7 }]
+            try {
+              if (Array.isArray(data.mappings)) {
+                for (const m of data.mappings) {
+                  if (m.client_id && m.server_id) {
+                    // update local person record if present
+                    try {
+                      const person = await getById(m.client_id);
+                      if (person) {
+                        person.server_id = m.server_id;
+                        await upsertPerson(person);
+                      }
+                    } catch (e) {
+                      // ignore mapping update errors
+                      errLog('mapping update error', e);
+                    }
+                  }
+                  if (m.client_qid) {
+                    // remove outbox item explicitly if server mapped it
+                    try {
+                      await removeOutboxItem(m.client_qid);
+                    } catch (e) {
+                      // ignore
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              errLog('processing mappings failed', e);
+            }
+          } else {
+            // default: remove the outbox item on success
+            await removeOutboxItem(item.qid);
+          }
+
           if (onProgress) onProgress(item.qid);
         } catch (e) {
-          // network error — stop and retry later
-          errLog('flushOutbox network error', e);
+          // network or retry exhaustion — stop and retry later
+          errLog('flushOutbox network error or retry exhausted', e);
           return { success: false, error: e };
         }
       }
@@ -334,7 +425,31 @@ const DB = (function () {
     }
   }
 
-  return {
+  // Auto flush on online
+  function _setupAutoFlush() {
+    try {
+      window.addEventListener('online', async () => {
+        log('navigator back online — attempting to flush outbox');
+        try {
+          const res = await flushOutbox();
+          log('auto flushOutbox result', res);
+        } catch (e) {
+          errLog('auto flush failed', e);
+        }
+      });
+    } catch (e) {
+      errLog('setupAutoFlush failed', e);
+    }
+  }
+
+  // init: expose ready promise and set up auto flush
+  async function init() {
+    await ready();
+    _setupAutoFlush();
+  }
+
+  // Public API
+  const API = {
     ready,
     open,
     addPerson,
@@ -351,6 +466,20 @@ const DB = (function () {
     removeOutboxItem,
     flushOutbox,
     close,
-    testAddAndList
+    testAddAndList,
+    init
   };
-})();
+
+  // expose on window
+  window.DB = API;
+
+  // Start init in background (non-blocking)
+  _readyPromise = open().then(() => {
+    _setupAutoFlush();
+    return db;
+  }).catch(e => {
+    errLog('DB background open failed', e);
+    return null;
+  });
+
+})(window);

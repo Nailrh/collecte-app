@@ -52,6 +52,10 @@ def ajouter_personne(request):
 def modifier_personne(request, pk):
     personne = get_object_or_404(Personne, pk=pk)
 
+    # 🔧 Correction : forcer le format ISO pour le champ date
+    if personne.date_naissance:
+        personne.date_naissance = personne.date_naissance.strftime('%Y-%m-%d')
+
     if request.method == 'POST':
         form = PersonneForm(request.POST, instance=personne)
         erreurs = []
@@ -92,4 +96,5 @@ def supprimer_personne(request, pk):
     if request.method == 'POST':
         personne.delete()
         return redirect('liste_personnes')
+
     return render(request, 'personnes/supprimer.html', {'personne': personne})

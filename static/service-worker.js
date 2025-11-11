@@ -7,11 +7,12 @@ const MAX_RUNTIME_ENTRIES = 100;
 const NAV_TIMEOUT = 4000; // ms
 
 const PRECACHE_URLS = [
-  '/', 
+  '/',
   '/index.html',
+  '/ajouter/',
+  '/liste/',
   '/static/offline.html',
-  '/static/icons/icon-192.png',
-  '/static/icons/icon-512.png',
+  '/static/icons/collecte-cm-1.png',
   '/static/manifest.json'
 ];
 
@@ -150,7 +151,7 @@ self.addEventListener('fetch', (event) => {
       } catch (e) {
         // fallback for images -> placeholder
         if (req.destination === 'image') {
-          const placeholder = await caches.match('/static/icons/icon-192.png');
+          const placeholder = await caches.match('/static/icons/collecte-cm-1.png');
           if (placeholder) return placeholder;
         }
         const fallback = await caches.match('/static/offline.html');
@@ -185,4 +186,3 @@ self.addEventListener('message', (event) => {
     })();
   }
 });
-

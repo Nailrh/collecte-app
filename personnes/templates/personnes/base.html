@@ -23,7 +23,8 @@
     {% block content %}{% endblock %}
   </main>
 
-  <div id="toast" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1200;display:none"></div>
+  <div id="toast" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1200;display:none;
+       background:#333;color:#fff;padding:8px 12px;border-radius:4px;"></div>
 
   <!-- Scripts: indexeddb must be available before app code -->
   <script src="{% static 'js/indexeddb.js' %}"></script>

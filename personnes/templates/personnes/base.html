@@ -18,7 +18,10 @@
   {% block head_extra %}{% endblock %}
 </head>
 <body>
-  {% block content %}{% endblock %}
+  <!-- Bloc principal identifié -->
+  <main id="app-content">
+    {% block content %}{% endblock %}
+  </main>
 
   <div id="toast" aria-live="polite" style="position:fixed;bottom:16px;right:16px;z-index:1200;display:none"></div>
 
@@ -71,6 +74,9 @@
   <!-- SPA navigation handling -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const contentContainer = document.getElementById('app-content');
+      const toast = document.getElementById('toast');
+
       // Intercepte les clics sur les liens internes
       document.body.addEventListener('click', async (e) => {
         const link = e.target.closest('a');
@@ -81,18 +87,19 @@
             const res = await fetch(url);
             if (res.ok) {
               const html = await res.text();
-              // Remplace le contenu principal
               const parser = new DOMParser();
               const doc = parser.parseFromString(html, 'text/html');
-              const newContent = doc.querySelector('body').innerHTML;
-              document.body.innerHTML = newContent;
+              const newContent = doc.querySelector('#app-content').innerHTML;
+              contentContainer.innerHTML = newContent;
               history.pushState({}, '', url);
             } else {
               console.warn('Navigation failed:', res.status);
             }
           } catch (err) {
             console.warn('Offline navigation fallback:', err);
-            alert('Vous êtes hors ligne — contenu non disponible.');
+            toast.textContent = 'Mode hors ligne — contenu non disponible';
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
           }
         }
       });
@@ -106,7 +113,7 @@
             const html = await res.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            document.body.innerHTML = doc.querySelector('body').innerHTML;
+            contentContainer.innerHTML = doc.querySelector('#app-content').innerHTML;
           }
         } catch (err) {
           console.warn('Offline navigation fallback:', err);
